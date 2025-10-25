@@ -9,23 +9,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: { message: 'API key is not configured on the server.' } });
   }
 
+  // req.url contains the full path and query string, e.g., '/api/v1/models?foo=bar'
+  // We remove the '/api' prefix to get the path for the target API, e.g., '/v1/models?foo=bar'
+  const pathWithQuery = req.url?.substring(4); 
+  
+  if (!pathWithQuery) {
+    return res.status(400).json({ error: { message: 'Invalid API path provided.' } });
+  }
+
+  const targetUrl = `${ELEVENLABS_API_URL}${pathWithQuery}`;
+
   try {
-    // req.query.path is an array of path segments. e.g., ['v1', 'models']
-    const pathSegments = req.query.path as string[];
-    if (!Array.isArray(pathSegments) || pathSegments.length === 0) {
-        return res.status(400).json({ error: { message: 'Invalid API path provided.' } });
-    }
-    const elevenLabsPath = pathSegments.join('/');
-
-    // Reconstruct the original query string from the request URL
-    const originalUrl = new URL(req.url!, `http://${req.headers.host}`);
-    const queryString = originalUrl.search; // e.g., "?search=term"
-
-    const targetUrl = `${ELEVENLABS_API_URL}/${elevenLabsPath}${queryString}`;
-    
     const headers: HeadersInit = {
-      'xi-api-key': apiKey
+      'xi-api-key': apiKey,
     };
+    
+    // Forward relevant headers from the client request
     if (req.headers['accept']) {
       headers['Accept'] = req.headers['accept'];
     }
@@ -36,35 +35,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const elevenLabsResponse = await fetch(targetUrl, {
       method: req.method,
       headers: headers,
-      body: req.method !== 'GET' && req.method !== 'HEAD' ? JSON.stringify(req.body) : null,
+      // Only include a body for methods that support it.
+      // Vercel automatically parses the body, so we need to re-stringify it for the fetch call.
+      body: req.method !== 'GET' && req.method !== 'HEAD' ? JSON.stringify(req.body) : undefined,
       redirect: 'follow',
     });
 
-    // Set status and headers from the origin response
+    // Forward the status code from the ElevenLabs response
     res.status(elevenLabsResponse.status);
+
+    // Forward the headers from the ElevenLabs response
     elevenLabsResponse.headers.forEach((value, key) => {
-      // Vercel handles these headers automatically.
+      // Vercel handles these headers automatically; setting them manually can cause conflicts.
       const forbiddenHeaders = ['content-encoding', 'transfer-encoding', 'connection'];
       if (!forbiddenHeaders.includes(key.toLowerCase())) {
         res.setHeader(key, value);
       }
     });
 
-    // Stream the body from the origin response back to the client
-    if (elevenLabsResponse.body) {
-      const reader = elevenLabsResponse.body.getReader();
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) {
-          break;
-        }
-        res.write(value);
-      }
-    }
-    res.end();
+    // Buffer the entire response body and then send it.
+    // This is simpler and more reliable than streaming for this API.
+    const responseBodyBuffer = await elevenLabsResponse.arrayBuffer();
+    res.send(Buffer.from(responseBodyBuffer));
 
   } catch (error) {
     console.error('Proxy Error:', error);
-    res.status(502).json({ error: { message: 'An error occurred while proxying the request to ElevenLabs.' } });
+    res.status(502).json({ error: { message: 'An error occurred while proxying the request.' } });
   }
 }
