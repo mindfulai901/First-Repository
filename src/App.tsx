@@ -4,7 +4,6 @@ import Configurator from './components/Configurator';
 import ResultsDisplay from './components/ResultsDisplay';
 import SavedVoices from './components/SavedVoices';
 import ParagraphCountInput from './components/WordCountInput';
-import ModelSelector from './components/ModelSelector';
 import Instructions from './components/Instructions';
 import History from './components/History';
 import { generateVoiceover } from './services/elevenLabsService';
@@ -13,7 +12,7 @@ import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { useLocalStorage } from './hooks/useLocalStorage';
 
-type Step = 'script' | 'paragraphCount' | 'modelSelection' | 'config' | 'savedVoices' | 'results';
+type Step = 'script' | 'paragraphCount' | 'config' | 'savedVoices' | 'results';
 type View = 'app' | 'instructions' | 'history';
 
 const App: React.FC = () => {
@@ -22,7 +21,7 @@ const App: React.FC = () => {
   const [script, setScript] = useState<string>('');
   
   const [savedVoices, setSavedVoices] = useLocalStorage<SavedVoice[]>('elevenLabsSavedVoices', []);
-  const [modelId, setModelId] = useLocalStorage<string>('elevenLabsModelId', 'eleven_multilingual_v2');
+  const [modelId] = useLocalStorage<string>('elevenLabsModelId', 'eleven_multilingual_v2');
   const [history, setHistory] = useLocalStorage<HistoryItem[]>('elevenLabsHistory', []);
   
   const [paragraphsPerChunk, setParagraphsPerChunk] = useState<number>(1);
@@ -137,10 +136,8 @@ const App: React.FC = () => {
   const handleScriptNext = () => setStep('paragraphCount');
   
   const handleParagraphCountNext = () => {
-    setStep('modelSelection');
+    setStep('config');
   };
-
-  const handleModelSelectionNext = () => setStep('config');
 
   const handleReset = () => {
     setScript('');
@@ -166,8 +163,6 @@ const App: React.FC = () => {
         return <ScriptInput script={script} setScript={setScript} onNext={handleScriptNext} />;
       case 'paragraphCount':
         return <ParagraphCountInput paragraphsPerChunk={paragraphsPerChunk} setParagraphsPerChunk={setParagraphsPerChunk} onNext={handleParagraphCountNext} onBack={() => setStep('script')} />;
-      case 'modelSelection':
-        return <ModelSelector selectedModel={modelId} setSelectedModel={setModelId} onNext={handleModelSelectionNext} onBack={() => setStep('paragraphCount')} />;
       case 'config':
         return (
           <Configurator
@@ -177,7 +172,7 @@ const App: React.FC = () => {
             voiceSettings={voiceSettings}
             setVoiceSettings={setVoiceSettings}
             onGenerate={handleGenerate}
-            onBack={() => setStep('modelSelection')}
+            onBack={() => setStep('paragraphCount')}
             onShowSaved={() => setStep('savedVoices')}
             onSaveVoice={handleAddSavedVoice}
             savedVoices={savedVoices}
