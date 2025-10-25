@@ -77,20 +77,16 @@ const handleError = async (response: Response) => {
     let message = `Request failed with status code ${response.status}`;
     try {
         const errorJson = await response.json();
-        // Standard ElevenLabs error format
         if (errorJson.detail && typeof errorJson.detail.message === 'string') {
             message = errorJson.detail.message;
         } 
-        // Validation error format from ElevenLabs
         else if (Array.isArray(errorJson.detail) && errorJson.detail[0]?.msg) {
             message = errorJson.detail.map((d: any) => d.msg).join(', ');
         }
-        // Our proxy's own error format
         else if (errorJson.error && typeof errorJson.error.message === 'string') {
             message = errorJson.error.message;
         }
     } catch (e) {
-        // The body wasn't JSON, so we fall back to the status text.
         message = response.statusText || 'An unknown API error occurred.';
     }
     throw new ApiError(`API Error: ${response.status}. ${message}`, response.status);

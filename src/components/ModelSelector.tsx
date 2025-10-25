@@ -53,8 +53,7 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ selectedModel, setSelecte
     };
 
     fetchModels();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [selectedModel, setSelectedModel]);
   
   const pageCount = Math.ceil(models.length / modelsPerPage);
   const currentModels = models.slice(currentPage * modelsPerPage, (currentPage + 1) * modelsPerPage);

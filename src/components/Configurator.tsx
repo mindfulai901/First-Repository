@@ -35,12 +35,9 @@ const Configurator: React.FC<ConfiguratorProps> = ({
   const [isSaved, setIsSaved] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Get model capabilities to dynamically render the UI
   const capabilities = getModelCapabilities(modelId);
 
   useEffect(() => {
-    // This effect ensures that if a voiceId is already set (e.g., from a saved voice selection),
-    // its details are loaded into the 'activeVoice' state for display.
     if (voiceId && (!activeVoice || activeVoice.voice_id !== voiceId)) {
         const preselectedVoice = savedVoices.find(v => v.voice_id === voiceId);
         if (preselectedVoice) {
@@ -184,7 +181,7 @@ const Configurator: React.FC<ConfiguratorProps> = ({
   return (
     <div className="w-full max-w-4xl p-8 space-y-6 scroll-container">
       <div className="text-center">
-        <h2 className="text-4xl font-bold">Step 3: Configure Voice</h2>
+        <h2 className="text-4xl font-bold">Step 4: Configure Voice</h2>
         <p className="mt-2 text-lg text-gray-600">Find a voice and fine-tune its settings.</p>
       </div>
 

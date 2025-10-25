@@ -48,7 +48,7 @@ const ParagraphCountInput: React.FC<ParagraphCountInputProps> = ({ paragraphsPer
           disabled={paragraphsPerChunk < 1}
           className="w-full flex justify-center py-3 px-4 rounded-md text-2xl font-bold text-white hand-drawn-button"
         >
-          Next: Configure Voice
+          Next: Select Model
         </button>
         <button 
           onClick={onBack} 
