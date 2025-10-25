@@ -1,10 +1,9 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import ScriptInput from './components/ScriptInput';
 import Configurator from './components/Configurator';
 import ResultsDisplay from './components/ResultsDisplay';
-import ApiKeyInput from './components/ApiKeyInput';
 import SavedVoices from './components/SavedVoices';
-import ParagraphCountInput from './components/WordCountInput'; // Renamed internally, file path is the same
+import ParagraphCountInput from './components/WordCountInput';
 import ModelSelector from './components/ModelSelector';
 import Instructions from './components/Instructions';
 import History from './components/History';
@@ -14,16 +13,14 @@ import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { useLocalStorage } from './hooks/useLocalStorage';
 
-type Step = 'script' | 'paragraphCount' | 'apiKey' | 'modelSelection' | 'config' | 'savedVoices' | 'results';
+type Step = 'script' | 'paragraphCount' | 'modelSelection' | 'config' | 'savedVoices' | 'results';
 type View = 'app' | 'instructions' | 'history';
-type ApiKeyEntryReason = 'initial' | 'switch';
 
 const App: React.FC = () => {
   const [step, setStep] = useState<Step>('script');
   const [view, setView] = useState<View>('app');
   const [script, setScript] = useState<string>('');
   
-  const [apiKey, setApiKey] = useLocalStorage<string>('elevenLabsApiKey', '');
   const [savedVoices, setSavedVoices] = useLocalStorage<SavedVoice[]>('elevenLabsSavedVoices', []);
   const [modelId, setModelId] = useLocalStorage<string>('elevenLabsModelId', 'eleven_multilingual_v2');
   const [history, setHistory] = useLocalStorage<HistoryItem[]>('elevenLabsHistory', []);
@@ -42,9 +39,6 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
-  const [apiKeyEntryReason, setApiKeyEntryReason] = useState<ApiKeyEntryReason>('initial');
-  const [stepBeforeApiKeySwitch, setStepBeforeApiKeySwitch] = useState<Step>('script');
-
 
   const handleAddSavedVoice = (voice: SavedVoice) => {
     if (!savedVoices.some(v => v.voice_id === voice.voice_id)) {
@@ -80,8 +74,8 @@ const App: React.FC = () => {
   };
 
   const handleGenerate = useCallback(async () => {
-    if (!voiceId || !apiKey || !modelId) {
-      setError("Voice ID, API Key, and a Model must be set before generating.");
+    if (!voiceId || !modelId) {
+      setError("Voice ID and a Model must be set before generating.");
       return;
     }
     setIsLoading(true);
@@ -104,7 +98,7 @@ const App: React.FC = () => {
         const chunk = textChunks[i];
         setProgress({ current: i + 1, total: textChunks.length });
 
-        const result = await generateVoiceover(chunk, voiceId, apiKey, voiceSettings, modelId, previousRequestId);
+        const result = await generateVoiceover(chunk, voiceId, voiceSettings, modelId, previousRequestId);
         
         const audioUrl = URL.createObjectURL(result.blob);
         const newAudioFile: AudioResult = { id: i + 1, audioUrl, blob: result.blob };
@@ -138,29 +132,12 @@ const App: React.FC = () => {
       setIsLoading(false);
       setProgress(null);
     }
-  }, [script, paragraphsPerChunk, voiceId, apiKey, voiceSettings, modelId, setHistory]);
+  }, [script, paragraphsPerChunk, voiceId, voiceSettings, modelId, setHistory]);
 
   const handleScriptNext = () => setStep('paragraphCount');
   
   const handleParagraphCountNext = () => {
-    if (apiKey) {
-      setStep('modelSelection');
-    } else {
-      setApiKeyEntryReason('initial');
-      setStep('apiKey');
-    }
-  };
-
-  const handleApiKeyNext = () => {
-    if (apiKeyEntryReason === 'switch') {
-        setStep('script');
-    } else {
-        setStep('modelSelection');
-    }
-  };
-  
-  const handleApiKeyBack = () => {
-    setStep(stepBeforeApiKeySwitch);
+    setStep('modelSelection');
   };
 
   const handleModelSelectionNext = () => setStep('config');
@@ -176,13 +153,6 @@ const App: React.FC = () => {
     setView('app');
   }
 
-  const handleSwitchApiKey = () => {
-    setStepBeforeApiKeySwitch(step);
-    setApiKeyEntryReason('switch');
-    setView('app');
-    setStep('apiKey');
-  };
-
   const renderContent = () => {
     if (view === 'instructions') {
         return <Instructions onBack={() => setView('app')} />;
@@ -196,22 +166,11 @@ const App: React.FC = () => {
         return <ScriptInput script={script} setScript={setScript} onNext={handleScriptNext} />;
       case 'paragraphCount':
         return <ParagraphCountInput paragraphsPerChunk={paragraphsPerChunk} setParagraphsPerChunk={setParagraphsPerChunk} onNext={handleParagraphCountNext} onBack={() => setStep('script')} />;
-      case 'apiKey':
-        return (
-          <ApiKeyInput
-            apiKey={apiKey}
-            setApiKey={setApiKey}
-            onNext={handleApiKeyNext}
-            entryReason={apiKeyEntryReason}
-            onBack={handleApiKeyBack}
-          />
-        );
       case 'modelSelection':
-        return <ModelSelector apiKey={apiKey} selectedModel={modelId} setSelectedModel={setModelId} onNext={handleModelSelectionNext} onBack={() => setStep('paragraphCount')} />;
+        return <ModelSelector selectedModel={modelId} setSelectedModel={setModelId} onNext={handleModelSelectionNext} onBack={() => setStep('paragraphCount')} />;
       case 'config':
         return (
           <Configurator
-            apiKey={apiKey}
             modelId={modelId}
             voiceId={voiceId}
             setVoiceId={setVoiceId}
@@ -250,7 +209,7 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Header view={view} setView={setView} onSwitchApiKey={handleSwitchApiKey} />
+      <Header view={view} setView={setView} />
       <main className="flex-grow container mx-auto p-4 sm:p-6 lg:p-8 flex flex-col items-center justify-center max-w-6xl w-full">
         {renderContent()}
       </main>

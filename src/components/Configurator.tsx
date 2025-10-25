@@ -3,7 +3,6 @@ import { getVoice, searchSharedVoices, addSharedVoice, ApiError, getModelCapabil
 import type { Voice, SavedVoice, VoiceSettings, SharedVoice } from '../types';
 
 interface ConfiguratorProps {
-  apiKey: string;
   modelId: string;
   voiceId: string;
   setVoiceId: (id: string) => void;
@@ -25,7 +24,7 @@ const PauseIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w
 
 
 const Configurator: React.FC<ConfiguratorProps> = ({
-  apiKey, modelId, voiceId, setVoiceId, voiceSettings, setVoiceSettings, onGenerate, onBack, onShowSaved, onSaveVoice, savedVoices
+  modelId, voiceId, setVoiceId, voiceSettings, setVoiceSettings, onGenerate, onBack, onShowSaved, onSaveVoice, savedVoices
 }) => {
   const [activeVoice, setActiveVoice] = useState<Voice | null>(null);
   const [activeSharedVoice, setActiveSharedVoice] = useState<SharedVoice | null>(null);
@@ -36,12 +35,9 @@ const Configurator: React.FC<ConfiguratorProps> = ({
   const [isSaved, setIsSaved] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Get model capabilities to dynamically render the UI
   const capabilities = getModelCapabilities(modelId);
 
   useEffect(() => {
-    // This effect ensures that if a voiceId is already set (e.g., from a saved voice selection),
-    // its details are loaded into the 'activeVoice' state for display.
     if (voiceId && (!activeVoice || activeVoice.voice_id !== voiceId)) {
         const preselectedVoice = savedVoices.find(v => v.voice_id === voiceId);
         if (preselectedVoice) {
@@ -83,7 +79,7 @@ const Configurator: React.FC<ConfiguratorProps> = ({
     setIsSearching(true);
 
     try {
-      const data = await getVoice(voiceId, apiKey);
+      const data = await getVoice(voiceId);
       setActiveVoice(data);
       if (data.settings) {
         setVoiceSettings(data.settings);
@@ -91,7 +87,7 @@ const Configurator: React.FC<ConfiguratorProps> = ({
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
         try {
-          const sharedData = await searchSharedVoices(voiceId, apiKey);
+          const sharedData = await searchSharedVoices(voiceId);
           if (sharedData.voices && sharedData.voices.length > 0) {
             const foundVoice = sharedData.voices.find(v => v.voice_id === voiceId || v.name.toLowerCase() === voiceId.toLowerCase());
             if (foundVoice) {
@@ -123,9 +119,8 @@ const Configurator: React.FC<ConfiguratorProps> = ({
         activeSharedVoice.public_owner_id,
         activeSharedVoice.voice_id,
         activeSharedVoice.name,
-        apiKey
       );
-      const newOwnedVoice = await getVoice(addedVoice.voice_id, apiKey);
+      const newOwnedVoice = await getVoice(addedVoice.voice_id);
       setVoiceId(newOwnedVoice.voice_id);
       setActiveVoice(newOwnedVoice);
       if (newOwnedVoice.settings) {

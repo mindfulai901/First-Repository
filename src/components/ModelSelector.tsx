@@ -3,7 +3,6 @@ import { getModels } from '../services/elevenLabsService';
 import type { Model } from '../types';
 
 interface ModelSelectorProps {
-  apiKey: string;
   selectedModel: string;
   setSelectedModel: (modelId: string) => void;
   onNext: () => void;
@@ -25,7 +24,7 @@ const ArrowButton: React.FC<{ direction: 'left' | 'right'; onClick: () => void; 
 );
 
 
-const ModelSelector: React.FC<ModelSelectorProps> = ({ apiKey, selectedModel, setSelectedModel, onNext, onBack }) => {
+const ModelSelector: React.FC<ModelSelectorProps> = ({ selectedModel, setSelectedModel, onNext, onBack }) => {
   const [models, setModels] = useState<Model[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -34,15 +33,10 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ apiKey, selectedModel, se
 
   useEffect(() => {
     const fetchModels = async () => {
-      if (!apiKey) {
-        setError("API Key is not provided.");
-        setIsLoading(false);
-        return;
-      }
       setIsLoading(true);
       setError(null);
       try {
-        const allModels = await getModels(apiKey);
+        const allModels = await getModels();
         const ttsModels = allModels.filter(m => m.can_do_text_to_speech);
         setModels(ttsModels);
 
@@ -59,7 +53,7 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ apiKey, selectedModel, se
     };
 
     fetchModels();
-  }, [apiKey, selectedModel, setSelectedModel]);
+  }, [selectedModel, setSelectedModel]);
   
   const pageCount = Math.ceil(models.length / modelsPerPage);
   const currentModels = models.slice(currentPage * modelsPerPage, (currentPage + 1) * modelsPerPage);
