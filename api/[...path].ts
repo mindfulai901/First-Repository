@@ -1,5 +1,4 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { URLSearchParams } from 'url';
 
 const ELEVENLABS_API_URL = 'https://api.elevenlabs.io';
 
@@ -7,28 +6,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const apiKey = process.env.ELEVENLABS_API_KEY;
 
   if (!apiKey) {
-    return res.status(500).json({ error: { message: 'API key is not configured on the server.' } });
+    console.error('API key is not configured.');
+    return res.status(500).json({ error: { message: 'Server configuration error: API key is missing.' } });
   }
 
-  // Reconstruct the path from the `path` query parameter provided by Vercel's routing.
-  // e.g., /api/v1/models -> req.query.path is ['v1', 'models']
-  const pathSegments = req.query.path as string[];
-  const apiPath = pathSegments.join('/');
+  // req.url contains the full path and query string, e.g., '/api/v1/models?search=term'
+  // We remove the '/api' prefix to get the correct path for the target API.
+  const apiPath = req.url?.replace('/api', '');
+  if (!apiPath) {
+      return res.status(400).json({ error: { message: 'Invalid API path.' } });
+  }
 
-  // Reconstruct the query string from all other query parameters.
-  const queryParams = { ...req.query };
-  delete queryParams.path; // remove the path segments from query params
-  
-  const searchParams = new URLSearchParams(queryParams as Record<string, string>).toString();
-  const fullApiPath = searchParams ? `/${apiPath}?${searchParams}` : `/${apiPath}`;
-  
-  const targetUrl = `${ELEVENLABS_API_URL}${fullApiPath}`;
+  const targetUrl = `${ELEVENLABS_API_URL}${apiPath}`;
+  console.log(`Proxying request to: ${targetUrl}`); // For debugging
 
   try {
     const headers: HeadersInit = {
       'xi-api-key': apiKey,
     };
-    
+
+    // Forward essential headers from the client
     if (req.headers['accept']) {
       headers['Accept'] = req.headers['accept'];
     }
@@ -36,28 +33,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       headers['Content-Type'] = req.headers['content-type'];
     }
 
+    // `req.body` is pre-parsed by Vercel. `fetch` expects a string or Buffer.
+    // If the body is a non-empty object, stringify it.
+    let body;
+    if (req.body && typeof req.body === 'object' && Object.keys(req.body).length > 0) {
+        body = JSON.stringify(req.body);
+    } else {
+        body = undefined;
+    }
+
     const elevenLabsResponse = await fetch(targetUrl, {
       method: req.method,
       headers,
-      body: req.method !== 'GET' && req.method !== 'HEAD' && req.body ? JSON.stringify(req.body) : undefined,
+      body,
       redirect: 'follow',
     });
+    
+    console.log(`Received ${elevenLabsResponse.status} from ${targetUrl}`); // For debugging
 
-    // Forward status and headers
+    // Forward the status code from the target service
     res.status(elevenLabsResponse.status);
+
+    // Forward headers from the target service to the client
     elevenLabsResponse.headers.forEach((value, key) => {
-      const forbiddenHeaders = ['content-encoding', 'transfer-encoding', 'connection'];
+      const forbiddenHeaders = ['content-encoding', 'transfer-encoding', 'connection', 'content-length'];
       if (!forbiddenHeaders.includes(key.toLowerCase())) {
         res.setHeader(key, value);
       }
     });
 
-    // Send back the response body
-    const responseBodyBuffer = await elevenLabsResponse.arrayBuffer();
-    res.send(Buffer.from(responseBodyBuffer));
+    // Buffer and send the response body.
+    const responseBuffer = Buffer.from(await elevenLabsResponse.arrayBuffer());
+    res.send(responseBuffer);
 
   } catch (error) {
-    console.error('Proxy Error:', error);
-    res.status(502).json({ error: { message: 'An error occurred while proxying the request.', details: error instanceof Error ? error.message : String(error) } });
+    console.error('Proxy request failed:', error);
+    res.status(502).json({ error: { message: 'The proxy server encountered an error.' } });
   }
 }

@@ -24,15 +24,11 @@ const Instructions: React.FC<InstructionsProps> = ({ onBack }) => {
           Decide how many paragraphs you want in each generated audio file. For long scripts, keeping this at 1 is often best for managing files.
         </p>
         <p>
-          <strong>Step 3: Select a Model</strong><br/>
-          Choose from a list of available ElevenLabs models. Your selection is saved for future sessions. A model must be selected to proceed.
+          <strong>Step 3: Configure Voice</strong><br/>
+          Find a voice by entering its Voice ID. You can search for voices in your own library or public ones from the Voice Library. Adjust settings like stability and clarity, then save your favorite configurations to use them again easily. The app defaults to the 'eleven_multilingual_v2' model for generation.
         </p>
         <p>
-          <strong>Step 4: Configure Voice</strong><br/>
-          Find a voice by entering its Voice ID. You can search for voices in your own library or public ones from the Voice Library. Adjust settings like stability and clarity, then save your favorite configurations.
-        </p>
-        <p>
-          <strong>Step 5: Generate & Download</strong><br/>
+          <strong>Step 4: Generate & Download</strong><br/>
           Click 'Generate' and watch the progress! Once complete, you can preview the full audio, listen to individual chunks, and download everything as a convenient ZIP file.
         </p>
       </div>
