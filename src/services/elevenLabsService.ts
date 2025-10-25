@@ -74,9 +74,26 @@ const fetchWithRetry = async (url: string, options: RequestInit, retries = 5, ba
 };
 
 const handleError = async (response: Response) => {
-  const errorData = await response.json().catch(() => ({ error: { message: 'An unknown API error occurred.' } }));
-  throw new ApiError(`API Error: ${response.status} ${response.statusText}. ${errorData.error?.message || ''}`, response.status);
-}
+    let message = response.statusText || 'An unknown API error occurred.';
+    try {
+        const errorJson = await response.json();
+        // Standard ElevenLabs error format
+        if (errorJson.detail && typeof errorJson.detail.message === 'string') {
+            message = errorJson.detail.message;
+        } 
+        // Validation error format from ElevenLabs
+        else if (Array.isArray(errorJson.detail) && errorJson.detail[0]?.msg) {
+            message = errorJson.detail[0].msg;
+        }
+        // Our proxy's own error format
+        else if (errorJson.error && typeof errorJson.error.message === 'string') {
+            message = errorJson.error.message;
+        }
+    } catch (e) {
+        // The body wasn't JSON, so we'll just use the statusText.
+    }
+    throw new ApiError(`API Error: ${response.status}. ${message}`, response.status);
+};
 
 export const generateVoiceover = async (
   text: string, 

@@ -3,42 +3,48 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 const ELEVENLABS_API_URL = 'https://api.elevenlabs.io';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const { path } = req.query;
   const apiKey = process.env.ELEVENLABS_API_KEY;
 
   if (!apiKey) {
-    return res.status(500).json({ error: { message: 'API key is not configured on the server. Please contact the administrator.' } });
-  }
-  
-  if (!path || !Array.isArray(path)) {
-      return res.status(400).json({ error: { message: 'Invalid API path provided.' } });
+    return res.status(500).json({ error: { message: 'API key is not configured on the server.' } });
   }
 
-  const endpointPath = path.join('/');
-  const targetUrl = `${ELEVENLABS_API_URL}/${endpointPath}`;
+  // req.url contains the full path and query string after the /api prefix (e.g., /v1/models)
+  // This is a more reliable way to construct the target URL than parsing req.query.
+  const targetUrl = `${ELEVENLABS_API_URL}${req.url}`;
+  
+  const headers: HeadersInit = {
+    'Accept': req.headers.accept || 'application/json',
+    'xi-api-key': apiKey,
+  };
+
+  const isWriteMethod = req.method === 'POST' || req.method === 'PUT';
+  if (isWriteMethod && req.body) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   try {
     const elevenLabsResponse = await fetch(targetUrl, {
       method: req.method,
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': req.headers.accept || 'application/json',
-        'xi-api-key': apiKey,
-      },
-      body: (req.method === 'POST' || req.method === 'PUT') ? JSON.stringify(req.body) : undefined,
+      headers: headers,
+      // Only include body for write methods and if a body exists
+      body: isWriteMethod && req.body ? JSON.stringify(req.body) : undefined,
     });
 
     res.status(elevenLabsResponse.status);
 
     elevenLabsResponse.headers.forEach((value, key) => {
-        if (key.toLowerCase() !== 'content-encoding' && key.toLowerCase() !== 'transfer-encoding' && key.toLowerCase() !== 'connection') {
+        // These headers can interfere with Vercel's response handling and should not be forwarded.
+        const forbiddenHeaders = ['content-encoding', 'transfer-encoding', 'connection'];
+        if (!forbiddenHeaders.includes(key.toLowerCase())) {
             res.setHeader(key, value);
         }
     });
-
+    
+    // Pipe the response body from ElevenLabs directly to the client.
     if (elevenLabsResponse.body) {
-        // @ts-ignore
-        elevenLabsResponse.body.pipe(res);
+        const bodyStream = elevenLabsResponse.body as unknown as NodeJS.ReadableStream;
+        bodyStream.pipe(res);
     } else {
         res.end();
     }
