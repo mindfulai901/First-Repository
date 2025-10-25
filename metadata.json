@@ -1,5 +1,5 @@
 {
-  "name": "Copy of Eleven Labs Voiceover",
+  "name": "Eleven Labs Voiceover",
   "description": "An application to generate voiceovers from a script using ElevenLabs API. Providing voiceover for longer scripts without needing you to create it for one by one paragraphs.",
   "requestFramePermissions": []
 }
