@@ -32,7 +32,7 @@ const Instructions: React.FC<InstructionsProps> = ({ onBack }) => {
           Find a voice by entering its Voice ID. You can search for voices in your own library or public ones from the Voice Library. Adjust settings like stability and clarity, then save your favorite configurations.
         </p>
         <p>
-          <strong>Step 5: Generate & Download</strong><br/>
+          <strong>Finally: Generate & Download</strong><br/>
           Click 'Generate' and watch the progress! Once complete, you can preview the full audio, listen to individual chunks, and download everything as a convenient ZIP file.
         </p>
       </div>

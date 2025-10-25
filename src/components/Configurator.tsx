@@ -35,16 +35,19 @@ const Configurator: React.FC<ConfiguratorProps> = ({
   const [isSaved, setIsSaved] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
+  // Get model capabilities to dynamically render the UI
   const capabilities = getModelCapabilities(modelId);
 
   useEffect(() => {
+    // This effect ensures that if a voiceId is already set (e.g., from a saved voice selection),
+    // its details are loaded into the 'activeVoice' state for display.
     if (voiceId && (!activeVoice || activeVoice.voice_id !== voiceId)) {
         const preselectedVoice = savedVoices.find(v => v.voice_id === voiceId);
         if (preselectedVoice) {
             handleSelectSavedVoice(preselectedVoice);
         }
     }
-  }, [voiceId, savedVoices, activeVoice]);
+  }, [voiceId, savedVoices]);
 
 
   useEffect(() => {
@@ -118,7 +121,7 @@ const Configurator: React.FC<ConfiguratorProps> = ({
       const addedVoice = await addSharedVoice(
         activeSharedVoice.public_owner_id,
         activeSharedVoice.voice_id,
-        activeSharedVoice.name,
+        activeSharedVoice.name
       );
       const newOwnedVoice = await getVoice(addedVoice.voice_id);
       setVoiceId(newOwnedVoice.voice_id);
