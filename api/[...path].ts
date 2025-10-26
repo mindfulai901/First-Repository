@@ -1,6 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-// Fix: Import Buffer to resolve TypeScript error in Node.js environment.
-import { Buffer } from 'buffer';
+import { Readable } from 'stream';
 
 const ELEVENLABS_API_URL = 'https://api.elevenlabs.io';
 
@@ -36,12 +35,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // `req.body` is pre-parsed by Vercel. `fetch` expects a string or Buffer.
-    // If the body is a non-empty object, stringify it.
+    // Stringify the body only for appropriate methods and if it's not empty.
     let body;
-    if (req.body && typeof req.body === 'object' && Object.keys(req.body).length > 0) {
+    if (req.method !== 'GET' && req.method !== 'HEAD' && req.body && Object.keys(req.body).length > 0) {
         body = JSON.stringify(req.body);
-    } else {
-        body = undefined;
     }
 
     const elevenLabsResponse = await fetch(targetUrl, {
@@ -58,15 +55,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Forward headers from the target service to the client
     elevenLabsResponse.headers.forEach((value, key) => {
-      const forbiddenHeaders = ['content-encoding', 'transfer-encoding', 'connection', 'content-length'];
+      const forbiddenHeaders = ['content-encoding', 'transfer-encoding', 'connection'];
       if (!forbiddenHeaders.includes(key.toLowerCase())) {
         res.setHeader(key, value);
       }
     });
 
-    // Buffer and send the response body.
-    const responseBuffer = Buffer.from(await elevenLabsResponse.arrayBuffer());
-    res.send(responseBuffer);
+    // Stream the response body back to the client.
+    if (elevenLabsResponse.body) {
+      const bodyStream = Readable.fromWeb(elevenLabsResponse.body as any);
+      bodyStream.pipe(res);
+    } else {
+      res.end();
+    }
 
   } catch (error) {
     console.error('Proxy request failed:', error);

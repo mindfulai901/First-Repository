@@ -1,5 +1,15 @@
-// Fix: Add reference to vite client types to fix 'import.meta.env' error
-/// <reference types="vite/client" />
+// Fix: To resolve TypeScript errors with Vite's `import.meta.env`, we augment
+// the global `ImportMeta` interface. This removes the need for the problematic
+// triple-slash directive and provides type-safety for environment variables.
+declare global {
+  interface ImportMeta {
+    readonly env: {
+      readonly VITE_SUPABASE_URL: string;
+      readonly VITE_SUPABASE_ANON_KEY: string;
+    }
+  }
+}
+
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
