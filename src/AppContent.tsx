@@ -9,6 +9,7 @@ import Login from './components/Login';
 import ResultsDisplay from './components/ResultsDisplay';
 import ScriptInput from './components/ScriptInput';
 import BatchProcessor from './components/BatchProcessor';
+import StartScreen from './components/StartScreen';
 import type { SavedVoice, VoiceSettings, HistoryItem, AudioResult, BatchJob } from './types';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
@@ -18,13 +19,13 @@ import { useLocalStorage } from './hooks/useLocalStorage';
 import { generateVoiceover } from './services/elevenLabsService';
 
 
-type Step = 'script' | 'paragraphCount' | 'modelSelection' | 'config' | 'savedVoices' | 'singleResults' | 'batchResults';
+type Step = 'start' | 'script' | 'paragraphCount' | 'modelSelection' | 'config' | 'savedVoices' | 'singleResults' | 'batchResults';
 type View = 'app' | 'instructions' | 'history';
 type Mode = 'single' | 'batch';
 
 export const AppContent: React.FC = () => {
   const { user } = useAuth();
-  const [step, setStep] = useState<Step>('script');
+  const [step, setStep] = useState<Step>('start');
   const [view, setView] = useState<View>('app');
   const [mode, setMode] = useState<Mode>('single');
   
@@ -90,7 +91,7 @@ export const AppContent: React.FC = () => {
     setIsLoading(false);
     setVoiceId('');
     setParagraphsPerChunk(1);
-    setStep('script');
+    setStep('start');
     setView('app');
   }
 
@@ -229,8 +230,10 @@ export const AppContent: React.FC = () => {
     if (view === 'history') return <History history={history} setHistory={setHistory} onBack={() => setView('app')} />;
 
     switch (step) {
+      case 'start':
+        return <StartScreen onSelectMode={(selectedMode) => { setMode(selectedMode); setStep('script'); }} />;
       case 'script':
-        return <ScriptInput script={script} setScript={setScript} onFilesChange={setStagedFiles} setMode={setMode} onNext={() => setStep('paragraphCount')} />;
+        return <ScriptInput script={script} setScript={setScript} onFilesChange={setStagedFiles} mode={mode} onNext={() => setStep('paragraphCount')} onBack={() => setStep('start')} />;
       case 'paragraphCount':
         return <ParagraphCountInput paragraphsPerChunk={paragraphsPerChunk} setParagraphsPerChunk={setParagraphsPerChunk} onNext={() => setStep('modelSelection')} onBack={() => setStep('script')} />;
       case 'modelSelection':
