@@ -8,7 +8,6 @@ import History from './components/History';
 import Login from './components/Login';
 import ResultsDisplay from './components/ResultsDisplay';
 import ScriptInput from './components/ScriptInput';
-import BatchProcessor from './components/BatchProcessor';
 import type { SavedVoice, VoiceSettings, HistoryItem, AudioResult, BatchJob } from './types';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
@@ -18,7 +17,7 @@ import { useLocalStorage } from './hooks/useLocalStorage';
 import { generateVoiceover } from './services/elevenLabsService';
 
 
-type Step = 'script' | 'paragraphCount' | 'modelSelection' | 'config' | 'savedVoices' | 'singleResults' | 'batchResults';
+type Step = 'script' | 'paragraphCount' | 'modelSelection' | 'config' | 'savedVoices' | 'results';
 type View = 'app' | 'instructions' | 'history';
 type Mode = 'single' | 'batch';
 
@@ -49,6 +48,7 @@ export const AppContent: React.FC = () => {
 
   // Results state
   const [audioFiles, setAudioFiles] = useState<AudioResult[]>([]);
+  const [batchJobs, setBatchJobs] = useState<BatchJob[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
@@ -86,6 +86,7 @@ export const AppContent: React.FC = () => {
     setScript('');
     setStagedFiles([]);
     setAudioFiles([]);
+    setBatchJobs([]);
     setError(null);
     setIsLoading(false);
     setVoiceId('');
@@ -123,7 +124,8 @@ export const AppContent: React.FC = () => {
     setIsLoading(true);
     setError(null);
     setAudioFiles([]);
-    setStep('singleResults');
+    setBatchJobs([]);
+    setStep('results');
 
     const textChunks = splitScriptByParagraphs(script, paragraphsPerChunk);
     if (textChunks.length === 0) {
@@ -178,11 +180,46 @@ export const AppContent: React.FC = () => {
         setProgress(null);
     }
   };
+  
+  const processSingleBatchJob = async (job: BatchJob): Promise<string> => {
+    if (!user) throw new Error("User not authenticated.");
+
+    const textChunks = splitScriptByParagraphs(job.script_content, job.paragraphs_per_chunk);
+    if (textChunks.length === 0) throw new Error("Script is empty.");
+
+    const collectedBlobs: Blob[] = [];
+    let previousRequestId: string | undefined = undefined;
+
+    for (let i = 0; i < textChunks.length; i++) {
+        setBatchJobs(prev => prev.map(j => 
+            j.id === job.id 
+            ? { ...j, progress: { current: i + 1, total: textChunks.length } } 
+            : j
+        ));
+        const result = await generateVoiceover(textChunks[i], job.voice_id, job.voice_settings, job.model_id, previousRequestId);
+        collectedBlobs.push(result.blob);
+        previousRequestId = result.requestId;
+    }
+
+    const combinedBlob = new Blob(collectedBlobs, { type: 'audio/mpeg' });
+    const fileName = `${user.id}/${job.id}.mp3`;
+
+    const { error: uploadError } = await supabase.storage.from('batch_audio').upload(fileName, combinedBlob, { upsert: true });
+    if (uploadError) throw new Error(`Storage Error: ${uploadError.message}`);
+
+    const { data: { publicUrl } } = supabase.storage.from('batch_audio').getPublicUrl(fileName);
+    if (!publicUrl) throw new Error('Could not get public URL.');
+
+    return publicUrl;
+  };
 
   const handleBatchGenerate = async () => {
     if (!user || stagedFiles.length === 0) return;
     setIsLoading(true);
     setError(null);
+    setAudioFiles([]);
+    setBatchJobs([]);
+    setStep('results');
 
     const filePromises = stagedFiles.map(file => {
         return new Promise<{ name: string, content: string }>((resolve, reject) => {
@@ -195,7 +232,7 @@ export const AppContent: React.FC = () => {
 
     try {
         const fileContents = await Promise.all(filePromises);
-        const newJobs: Omit<BatchJob, 'id' | 'created_at'>[] = fileContents.map(fc => ({
+        const newJobsData: Omit<BatchJob, 'id' | 'created_at'>[] = fileContents.map(fc => ({
             user_id: user.id,
             script_content: fc.content,
             original_filename: fc.name,
@@ -206,16 +243,35 @@ export const AppContent: React.FC = () => {
             voice_settings: voiceSettings,
         }));
 
-        const { error: insertError } = await supabase.from('batch_jobs').insert(newJobs);
+        const { data: insertedJobs, error: insertError } = await supabase
+            .from('batch_jobs')
+            .insert(newJobsData)
+            .select();
+        
         if (insertError) throw insertError;
         
-        setStagedFiles([]); // Clear staged files after queuing
-        setStep('batchResults');
+        setBatchJobs(insertedJobs as BatchJob[]);
+        setStagedFiles([]);
+        setIsLoading(false);
 
+        for (const job of insertedJobs) {
+            try {
+                setBatchJobs(prev => prev.map(j => j.id === job.id ? { ...j, status: 'processing' } : j));
+                await supabase.from('batch_jobs').update({ status: 'processing' }).eq('id', job.id);
+                
+                const finalUrl = await processSingleBatchJob(job);
+                
+                setBatchJobs(prev => prev.map(j => j.id === job.id ? { ...j, status: 'completed', final_audio_url: finalUrl, progress: null } : j));
+                await supabase.from('batch_jobs').update({ status: 'completed', final_audio_url: finalUrl }).eq('id', job.id);
+            } catch (err) {
+                const message = err instanceof Error ? err.message : "An unknown error occurred.";
+                setBatchJobs(prev => prev.map(j => j.id === job.id ? { ...j, status: 'error', error_message: message, progress: null } : j));
+                await supabase.from('batch_jobs').update({ status: 'error', error_message: message }).eq('id', job.id);
+            }
+        }
     } catch (err) {
          setError(err instanceof Error ? err.message : 'An unknown error occurred creating batch jobs.');
-    } finally {
-        setIsLoading(false);
+         setIsLoading(false);
     }
   };
 
@@ -260,10 +316,16 @@ export const AppContent: React.FC = () => {
         );
       case 'savedVoices':
         return <SavedVoices savedVoices={savedVoices} onSelectVoice={handleSelectSavedVoice} setSavedVoices={setSavedVoices} onBack={() => setStep('config')} />;
-      case 'singleResults':
-        return <ResultsDisplay audioFiles={audioFiles} isLoading={isLoading} error={error} onReset={handleResetWorkflow} progress={progress} />;
-      case 'batchResults':
-        return <BatchProcessor onResetWorkflow={handleResetWorkflow} />;
+      case 'results':
+        return <ResultsDisplay 
+                  mode={mode}
+                  audioFiles={audioFiles} 
+                  batchJobs={batchJobs}
+                  isLoading={isLoading} 
+                  error={error} 
+                  onReset={handleResetWorkflow} 
+                  progress={progress} 
+                />;
       default: return null;
     }
   };
