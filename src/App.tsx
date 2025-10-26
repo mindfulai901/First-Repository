@@ -20,7 +20,7 @@ type Step = 'script' | 'paragraphCount' | 'modelSelection' | 'config' | 'savedVo
 type View = 'app' | 'instructions' | 'history';
 
 const App: React.FC = () => {
-  const { session, user, loading } = useAuth();
+  const { session, user } = useAuth();
   const [step, setStep] = useState<Step>('script');
   const [view, setView] = useState<View>('app');
   const [script, setScript] = useState<string>('');
@@ -282,14 +282,6 @@ const App: React.FC = () => {
         return null;
     }
   };
-  
-  if (loading) {
-    return (
-        <div className="min-h-screen flex items-center justify-center bg-[#f4f1ea]">
-            <div className="animate-spin rounded-full h-32 w-32 border-t-4 border-b-4 border-[#9cb89c]"></div>
-        </div>
-    );
-  }
 
   return (
     <div className="min-h-screen flex flex-col">

@@ -5,7 +5,6 @@ import { supabase } from '../supabaseClient';
 interface AuthContextType {
   session: Session | null;
   user: User | null;
-  loading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -16,50 +15,42 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setLoading(true);
-
-    const getInitialSession = async () => {
-      try {
-        // Fetches the session from LocalStorage, and refreshes if necessary
-        const { data: { session }, error } = await supabase.auth.getSession();
-        if (error) {
-          console.error('Error fetching initial session:', error.message);
-          throw error;
-        }
-        setSession(session);
-        setUser(session?.user ?? null);
-      } catch (error) {
-        console.error('Failed to get initial session:', error);
-        // Ensure user is logged out in case of failure
-        setSession(null);
-        setUser(null);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    getInitialSession();
-
-    // Listen for changes in authentication state (login, logout)
+    // The onAuthStateChange listener is the single source of truth for auth state.
+    // It handles login, logout, and token refresh events.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
-      setLoading(false); // Auth state is confirmed, no longer loading
+      setLoading(false); // Once the listener fires, we have a definitive auth state.
     });
 
-    // Cleanup subscription on component unmount
+    // On initial load, we also force a check to handle the edge case where a user was
+    // deleted from the backend, but their local session token hasn't expired yet.
+    const checkInitialSession = async () => {
+        // This will trigger the onAuthStateChange listener with the latest session state.
+        // If the session is invalid (e.g., user deleted), the listener will receive a null session.
+        await supabase.auth.getSession();
+    };
+
+    checkInitialSession();
+
     return () => {
       subscription?.unsubscribe();
     };
   }, []);
 
-  const value = { session, user, loading };
+  const value = { session, user };
 
-  // Render children only after the initial loading is complete.
-  // This prevents rendering the app in a weird intermediate state.
+  if (loading) {
+      return (
+          <div className="min-h-screen flex items-center justify-center bg-[#f4f1ea]">
+              <div className="animate-spin rounded-full h-32 w-32 border-t-4 border-b-4 border-[#9cb89c]"></div>
+          </div>
+      );
+  }
+
   return (
     <AuthContext.Provider value={value}>
-      {!loading && children}
+      {children}
     </AuthContext.Provider>
   );
 };
