@@ -45,19 +45,32 @@ const App: React.FC = () => {
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
 
   useEffect(() => {
-    if (user) {
-      // Fetch saved voices
-      supabase.from('saved_voices').select('*').eq('user_id', user.id).then(({ data, error }) => {
-        if (error) console.error('Error fetching saved voices:', error);
-        else setSavedVoices(data as SavedVoice[] || []);
-      });
+    // This effect is responsible for fetching user-specific data once they are logged in.
+    // It is wrapped in a safe, async, self-invoking function to handle errors gracefully.
+    const fetchUserData = async () => {
+        if (user) {
+            try {
+                // Fetch saved voices and history in parallel for efficiency
+                const [voicesResponse, historyResponse] = await Promise.all([
+                    supabase.from('saved_voices').select('*').eq('user_id', user.id),
+                    supabase.from('history').select('*').eq('user_id', user.id).order('createdAt', { ascending: false }).limit(50)
+                ]);
 
-      // Fetch history
-      supabase.from('history').select('*').eq('user_id', user.id).order('createdAt', { ascending: false }).limit(50).then(({ data, error }) => {
-        if (error) console.error('Error fetching history:', error);
-        else setHistory(data as HistoryItem[] || []);
-      });
-    }
+                if (voicesResponse.error) throw voicesResponse.error;
+                setSavedVoices(voicesResponse.data as SavedVoice[] || []);
+
+                if (historyResponse.error) throw historyResponse.error;
+                setHistory(historyResponse.data as HistoryItem[] || []);
+
+            } catch (err) {
+                const message = err instanceof Error ? err.message : "An unknown error occurred."
+                console.error('Error fetching user data:', message);
+                setError(`Failed to load user data: ${message}`);
+            }
+        }
+    };
+
+    fetchUserData();
   }, [user]);
 
   const handleAddSavedVoice = async (voice: Omit<SavedVoice, 'id' | 'user_id'>) => {
@@ -272,7 +285,7 @@ const App: React.FC = () => {
   
   if (loading) {
     return (
-        <div className="min-h-screen flex items-center justify-center">
+        <div className="min-h-screen flex items-center justify-center bg-[#f4f1ea]">
             <div className="animate-spin rounded-full h-32 w-32 border-t-4 border-b-4 border-[#9cb89c]"></div>
         </div>
     );

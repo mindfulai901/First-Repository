@@ -16,27 +16,52 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const getSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
+    setLoading(true);
+
+    const getInitialSession = async () => {
+      try {
+        // Fetches the session from LocalStorage, and refreshes if necessary
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) {
+          console.error('Error fetching initial session:', error.message);
+          throw error;
+        }
+        setSession(session);
+        setUser(session?.user ?? null);
+      } catch (error) {
+        console.error('Failed to get initial session:', error);
+        // Ensure user is logged out in case of failure
+        setSession(null);
+        setUser(null);
+      } finally {
+        setLoading(false);
+      }
     };
     
-    getSession();
+    getInitialSession();
 
+    // Listen for changes in authentication state (login, logout)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
-      setLoading(false);
+      setLoading(false); // Auth state is confirmed, no longer loading
     });
 
-    return () => subscription.unsubscribe();
+    // Cleanup subscription on component unmount
+    return () => {
+      subscription?.unsubscribe();
+    };
   }, []);
 
   const value = { session, user, loading };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  // Render children only after the initial loading is complete.
+  // This prevents rendering the app in a weird intermediate state.
+  return (
+    <AuthContext.Provider value={value}>
+      {!loading && children}
+    </AuthContext.Provider>
+  );
 };
 
 export const useAuth = () => {

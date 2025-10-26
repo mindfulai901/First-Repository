@@ -16,17 +16,20 @@ const Login: React.FC = () => {
             const { error } = await supabase.auth.signInWithOAuth({
                 provider: 'google',
                 options: {
+                    // This should dynamically resolve to http://localhost:3000 in dev
                     redirectTo: window.location.origin,
                 },
             });
             if (error) {
-                console.error("Error logging in with Google:", error.message);
-                alert(`Could not sign in: ${error.message}`);
+                // This error is from Supabase before the redirect happens.
+                console.error("Error starting Google login flow:", error.message);
+                alert(`Could not initiate sign in: ${error.message}`);
             }
         } catch (e) {
-            console.error("An unexpected error occurred during login:", e);
+            // This catches unexpected errors in the client-side code itself.
+            console.error("An unexpected JavaScript error occurred during login:", e);
             const message = e instanceof Error ? e.message : "An unknown error occurred."
-            alert(`Login failed: ${message}`);
+            alert(`A critical error occurred: ${message}`);
         }
     };
 
