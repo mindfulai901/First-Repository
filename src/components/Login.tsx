@@ -12,14 +12,21 @@ const GoogleIcon = () => (
 
 const Login: React.FC = () => {
     const handleGoogleLogin = async () => {
-        const { error } = await supabase.auth.signInWithOAuth({
-            provider: 'google',
-            options: {
-                redirectTo: window.location.origin,
-            },
-        });
-        if (error) {
-            console.error("Error logging in with Google:", error.message);
+        try {
+            const { error } = await supabase.auth.signInWithOAuth({
+                provider: 'google',
+                options: {
+                    redirectTo: window.location.origin,
+                },
+            });
+            if (error) {
+                console.error("Error logging in with Google:", error.message);
+                alert(`Could not sign in: ${error.message}`);
+            }
+        } catch (e) {
+            console.error("An unexpected error occurred during login:", e);
+            const message = e instanceof Error ? e.message : "An unknown error occurred."
+            alert(`Login failed: ${message}`);
         }
     };
 

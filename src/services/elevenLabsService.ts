@@ -15,6 +15,28 @@ export interface ModelCapabilities {
   stabilityType: 'continuous' | 'discrete';
 }
 
+const IS_DEV = import.meta.env.DEV;
+const API_BASE_URL = IS_DEV ? 'https://api.elevenlabs.io' : '/api';
+
+const prepareApiRequest = (path: string, options: RequestInit = {}): [string, RequestInit] => {
+    const url = `${API_BASE_URL}${path}`;
+    const newOptions = { ...options };
+    const headers = new Headers(options.headers);
+
+    if (IS_DEV) {
+        const apiKey = import.meta.env.VITE_ELEVENLABS_API_KEY;
+        if (!apiKey) {
+            // This error will be caught by the calling function and displayed in the UI.
+            throw new ApiError("VITE_ELEVENLABS_API_KEY is not set in your .env.local file. This is required for local development.", 500);
+        }
+        headers.set('xi-api-key', apiKey);
+    }
+    
+    newOptions.headers = headers;
+    return [url, newOptions];
+}
+
+
 /**
  * Determines the supported voice setting capabilities for a given model ID.
  * @param modelId The ID of the model.
@@ -121,8 +143,6 @@ export const generateVoiceover = async (
     throw new Error("ElevenLabs Voice ID is required.");
   }
 
-  const PROXY_URL = `/api/v1/text-to-speech/${voiceId}`;
-  
   const capabilities = getModelCapabilities(modelId);
   const settingsToSend: { [key: string]: any } = {
     stability: voiceSettings.stability,
@@ -146,7 +166,7 @@ export const generateVoiceover = async (
     ...(previousRequestId && { previous_request_ids: [previousRequestId] }),
   };
 
-  const response = await fetchWithRetry(PROXY_URL, {
+  const [url, options] = prepareApiRequest(`/v1/text-to-speech/${voiceId}`, {
     method: 'POST',
     headers: {
       'Accept': 'audio/mpeg',
@@ -154,6 +174,9 @@ export const generateVoiceover = async (
     },
     body: JSON.stringify(body),
   });
+
+
+  const response = await fetchWithRetry(url, options);
 
   if (!response.ok) await handleError(response);
 
@@ -164,27 +187,30 @@ export const generateVoiceover = async (
 };
 
 export const getVoices = async (): Promise<VoicesResponse> => {
-  const response = await fetch('/api/v1/voices');
+  const [url, options] = prepareApiRequest('/v1/voices');
+  const response = await fetch(url, options);
   if (!response.ok) await handleError(response);
   return response.json();
 };
 
 export const getVoice = async (voiceId: string): Promise<Voice> => {
   if (!voiceId) throw new Error("Voice ID is required.");
-  const response = await fetch(`/api/v1/voices/${voiceId}`);
+  const [url, options] = prepareApiRequest(`/v1/voices/${voiceId}`);
+  const response = await fetch(url, options);
   if (!response.ok) await handleError(response);
   return response.json();
 };
 
 export const searchSharedVoices = async (searchTerm: string): Promise<SharedVoicesResponse> => {
   if (!searchTerm.trim()) throw new Error("Search term is required.");
-  const response = await fetch(`/api/v1/shared-voices?search=${encodeURIComponent(searchTerm)}`);
+  const [url, options] = prepareApiRequest(`/v1/shared-voices?search=${encodeURIComponent(searchTerm)}`);
+  const response = await fetch(url, options);
   if (!response.ok) await handleError(response);
   return response.json();
 };
 
 export const addSharedVoice = async (publicUserId: string, voiceId: string, newName: string): Promise<{ voice_id: string }> => {
-  const response = await fetch(`/api/v1/voices/add/${publicUserId}/${voiceId}`, {
+  const [url, options] = prepareApiRequest(`/v1/voices/add/${publicUserId}/${voiceId}`, {
     method: 'POST',
     headers: {
       'Accept': 'application/json',
@@ -192,12 +218,14 @@ export const addSharedVoice = async (publicUserId: string, voiceId: string, newN
     },
     body: JSON.stringify({ new_name: newName }),
   });
+  const response = await fetch(url, options);
   if (!response.ok) await handleError(response);
   return response.json();
 };
 
 export const getModels = async (): Promise<Model[]> => {
-  const response = await fetch('/api/v1/models');
+  const [url, options] = prepareApiRequest('/v1/models');
+  const response = await fetch(url, options);
   if (!response.ok) await handleError(response);
   return response.json();
 };
