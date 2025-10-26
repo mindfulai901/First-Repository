@@ -11,7 +11,7 @@ interface ConfiguratorProps {
   onGenerate: () => void;
   onBack: () => void;
   onShowSaved: () => void;
-  onSaveVoice: (voice: SavedVoice) => void;
+  onSaveVoice: (voice: Omit<SavedVoice, 'id' | 'user_id'>) => void;
   savedVoices: SavedVoice[];
 }
 
