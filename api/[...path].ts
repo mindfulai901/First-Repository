@@ -19,20 +19,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const targetUrl = `${ELEVENLABS_API_URL}${apiPath}`;
 
   try {
-    const headers: HeadersInit = {
-      'xi-api-key': apiKey,
-    };
+    const headers: HeadersInit = {};
 
-    if (req.headers['accept']) {
-      headers['Accept'] = req.headers['accept'];
+    // Forward most headers from the original request to ensure consistency.
+    for (const key in req.headers) {
+        // Exclude host-related headers as they are specific to the proxy request environment.
+        if (!['host', 'x-forwarded-host', 'x-forwarded-proto', 'x-vercel-id', 'x-real-ip', 'x-vercel-forwarded-for', 'x-vercel-deployment-url'].includes(key.toLowerCase())) {
+            const value = req.headers[key];
+            if (value) {
+                headers[key] = value;
+            }
+        }
     }
-    if (req.headers['content-type']) {
-      headers['Content-Type'] = req.headers['content-type'];
-    }
+    
+    // Securely set the secret API key, overriding any client-sent one.
+    headers['xi-api-key'] = apiKey;
+    
+    // The `fetch` API sets its own Content-Length, so we remove the original one to avoid conflicts.
+    delete headers['content-length'];
+    
 
     let body;
-    if (req.method !== 'GET' && req.method !== 'HEAD' && req.body && Object.keys(req.body).length > 0) {
-        body = JSON.stringify(req.body);
+    // Check if there's a body to forward. Vercel parses JSON bodies automatically.
+    if (req.method !== 'GET' && req.method !== 'HEAD' && req.body) {
+        // Ensure body is stringified for the fetch request.
+        body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
     }
 
     const elevenLabsResponse = await fetch(targetUrl, {
@@ -42,7 +53,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       redirect: 'follow',
     });
 
+    // Forward the response headers from ElevenLabs back to the client.
     elevenLabsResponse.headers.forEach((value, key) => {
+      // These headers are controlled by the server and should not be blindly forwarded.
       const forbiddenHeaders = ['content-encoding', 'transfer-encoding', 'connection'];
       if (!forbiddenHeaders.includes(key.toLowerCase())) {
         res.setHeader(key, value);
