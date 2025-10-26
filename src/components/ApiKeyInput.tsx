@@ -9,11 +9,13 @@ interface ApiKeyInputProps {
 }
 
 const ApiKeyInput: React.FC<ApiKeyInputProps> = ({ apiKey, setApiKey, onNext, entryReason, onBack }) => {
+  const isSwitching = entryReason === 'switch';
+
   return (
     <div className="w-full max-w-2xl p-8 space-y-8 text-center scroll-container">
-      <h2 className="text-4xl font-bold">Enter Your API Key</h2>
+      <h2 className="text-4xl font-bold">{isSwitching ? 'Switch API Key' : 'Step 3: Enter Your API Key'}</h2>
       <p className="mt-2 text-lg text-gray-600">
-        Please provide your ElevenLabs API key to continue. Your key is saved securely in your browser for future use.
+        Please provide your ElevenLabs API key to continue. Your key is saved securely in your browser's local storage for future use.
       </p>
       
       <div className="space-y-6">
@@ -24,7 +26,7 @@ const ApiKeyInput: React.FC<ApiKeyInputProps> = ({ apiKey, setApiKey, onNext, en
           <input
             id="api-key"
             type="password"
-            className="w-full p-3 bg-white border-2 border-gray-400 rounded-lg focus:ring-2 focus:ring-[#9cb89c] focus:border-[#9cb89c] transition duration-300 placeholder-gray-500 text-center text-xl"
+            className="w-full p-3 bg-white border-2 border-gray-400 rounded-lg focus:ring-2 focus:ring-[#9cb89c] focus:border-[#9cb89c] transition duration-300 placeholder-gray-500 text-center text-xl themed-input"
             placeholder="Enter your ElevenLabs API Key"
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
@@ -32,31 +34,23 @@ const ApiKeyInput: React.FC<ApiKeyInputProps> = ({ apiKey, setApiKey, onNext, en
         </div>
       </div>
       
-      {entryReason === 'switch' ? (
-        <div className="flex flex-col sm:flex-row-reverse gap-4">
-          <button
-            onClick={onNext}
-            disabled={!apiKey.trim()}
-            className="w-full flex justify-center py-3 px-4 rounded-md text-2xl font-bold text-white hand-drawn-button"
-          >
-            Change
-          </button>
-          <button
-            onClick={onBack}
-            className="w-full flex justify-center py-3 px-4 rounded-md text-2xl font-bold text-black hand-drawn-button bg-[#e0dcd3]"
-          >
-            Back
-          </button>
-        </div>
-      ) : (
+      <div className="flex flex-col sm:flex-row-reverse gap-4">
         <button
           onClick={onNext}
           disabled={!apiKey.trim()}
           className="w-full flex justify-center py-3 px-4 rounded-md text-2xl font-bold text-white hand-drawn-button"
         >
-          Continue
+          {isSwitching ? 'Save and Continue' : 'Next: Select Model'}
         </button>
-      )}
+        {isSwitching && (
+          <button
+            onClick={onBack}
+            className="w-full flex justify-center py-3 px-4 rounded-md text-2xl font-bold text-black hand-drawn-button bg-[#e0dcd3]"
+          >
+            Cancel
+          </button>
+        )}
+      </div>
     </div>
   );
 };

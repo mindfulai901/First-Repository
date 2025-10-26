@@ -1,6 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
+// FIX: Import `getModelCapabilities` to make it available in this component.
 import { getVoice, searchSharedVoices, addSharedVoice, ApiError, getModelCapabilities } from '../services/elevenLabsService';
 import type { Voice, SavedVoice, VoiceSettings, SharedVoice } from '../types';
+import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../supabaseClient';
+
 
 interface ConfiguratorProps {
   modelId: string;
@@ -11,21 +15,22 @@ interface ConfiguratorProps {
   onGenerate: () => void;
   onBack: () => void;
   onShowSaved: () => void;
-  onSaveVoice: (voice: Omit<SavedVoice, 'id' | 'user_id'>) => void;
   savedVoices: SavedVoice[];
+  setSavedVoices: (voices: SavedVoice[]) => void;
 }
 
 const SearchIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" /></svg>;
 const SaveIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-3.13L5 18V4z" /></svg>;
 const PlusIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" /></svg>;
-const LoadingSpinner = () => <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-current"></div>;
+const LoadingSpinner = () => <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-black"></div>;
 const PlayIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" /></svg>;
 const PauseIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1zm4 0a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>;
 
 
 const Configurator: React.FC<ConfiguratorProps> = ({
-  modelId, voiceId, setVoiceId, voiceSettings, setVoiceSettings, onGenerate, onBack, onShowSaved, onSaveVoice, savedVoices
+  modelId, voiceId, setVoiceId, voiceSettings, setVoiceSettings, onGenerate, onBack, onShowSaved, savedVoices, setSavedVoices
 }) => {
+  const { user } = useAuth();
   const [activeVoice, setActiveVoice] = useState<Voice | null>(null);
   const [activeSharedVoice, setActiveSharedVoice] = useState<SharedVoice | null>(null);
   const [isSearching, setIsSearching] = useState<boolean>(false);
@@ -35,6 +40,7 @@ const Configurator: React.FC<ConfiguratorProps> = ({
   const [isSaved, setIsSaved] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
+  // FIX: `getModelCapabilities` is a function that should be called with `modelId`.
   const capabilities = getModelCapabilities(modelId);
 
   useEffect(() => {
@@ -85,12 +91,10 @@ const Configurator: React.FC<ConfiguratorProps> = ({
         setVoiceSettings(data.settings);
       }
     } catch (err) {
-      // Duck-typing the error to see if it's an ApiError from our service.
-      // This is more robust than `instanceof` which can fail in some environments.
-      // If the voice is not found in the user's library (indicated by a 404 or a 400 "not found" error),
-      // then try searching the public voice library.
       const apiError = err as ApiError;
-      if (apiError && apiError.status && (apiError.status === 404 || apiError.status === 400)) {
+      // FIX: Use "duck typing" by checking for the 'status' property instead of 'instanceof'.
+      // This is more reliable in production environments where class names can be mangled.
+      if (apiError && (apiError.status === 404 || apiError.status === 400)) {
         try {
           const sharedData = await searchSharedVoices(voiceId);
           if (sharedData.voices && sharedData.voices.length > 0) {
@@ -102,7 +106,10 @@ const Configurator: React.FC<ConfiguratorProps> = ({
               setSearchError(`Could not find a public voice with ID or name '${voiceId}'.`);
             }
           } else {
-            setSearchError(`Could not find voice '${voiceId}' in your library or the public library.`);
+            // IMPROVEMENT: Provide a more helpful error message if both searches fail.
+            setSearchError(
+              `Voice '${voiceId}' was not found in your library or the public one. This can happen if the voice is private and the API key configured on the server is incorrect or from a different ElevenLabs account. Please verify your Vercel project's ELEVENLABS_API_KEY.`
+            );
           }
         } catch (sharedErr) {
           setSearchError(sharedErr instanceof Error ? sharedErr.message : "Error searching public library.");
@@ -146,17 +153,30 @@ const Configurator: React.FC<ConfiguratorProps> = ({
     setIsPlaying(!isPlaying);
   };
 
-  const handleSave = () => {
-    if (!activeVoice) return;
-    onSaveVoice({
-      voice_id: activeVoice.voice_id,
-      name: activeVoice.name,
-      customName: activeVoice.name,
-      settings: voiceSettings,
-      preview_url: activeVoice.preview_url,
-      labels: activeVoice.labels,
-    });
-    setIsSaved(true);
+  const handleSave = async () => {
+    if (!activeVoice || !user) return;
+    const voiceToSave: SavedVoice = {
+        user_id: user.id,
+        voice_id: activeVoice.voice_id,
+        name: activeVoice.name,
+        customName: activeVoice.name, // Let's keep it simple for now, can add custom naming later
+        settings: voiceSettings,
+        preview_url: activeVoice.preview_url,
+        labels: activeVoice.labels,
+    };
+
+    const { data, error } = await supabase
+        .from('saved_voices')
+        .insert(voiceToSave)
+        .select()
+        .single();
+        
+    if (error) {
+        setSearchError(`Failed to save voice: ${error.message}`);
+    } else if (data) {
+        setSavedVoices([...savedVoices, data as SavedVoice]);
+        setIsSaved(true);
+    }
   };
 
   const handleSelectSavedVoice = (savedVoice: SavedVoice) => {
@@ -176,7 +196,7 @@ const Configurator: React.FC<ConfiguratorProps> = ({
   const handleSettingChange = (setting: keyof VoiceSettings, value: number | boolean) => {
     setVoiceSettings({ ...voiceSettings, [setting]: value });
   };
-
+  
   const stabilityOptions = [
     { label: 'Creative', value: 0.0 },
     { label: 'Natural', value: 0.5 },
@@ -186,101 +206,120 @@ const Configurator: React.FC<ConfiguratorProps> = ({
   return (
     <div className="w-full max-w-4xl p-8 space-y-6 scroll-container">
       <div className="text-center">
-        <h2 className="text-4xl font-bold">Step 3: Configure Voice</h2>
+        <h2 className="text-4xl font-bold">Step 4: Configure Voice</h2>
         <p className="mt-2 text-lg text-[var(--color-text-muted)]">Find a voice and fine-tune its settings.</p>
       </div>
 
-      <div className="space-y-4 p-4 rounded-lg border-2 border-[var(--color-border)]" style={{backgroundColor: 'var(--color-scroll-container-bg-translucent)'}}>
+      <div className="space-y-4 p-4 bg-[var(--color-accent-bg-translucent)] rounded-lg border-2 border-[var(--color-border)]">
         <div className="flex justify-between items-center">
-            <label htmlFor="voice-id" className="block text-base font-medium text-[var(--color-text)]">ElevenLabs Voice ID or Name</label>
-            <button onClick={onShowSaved} className="text-base text-[var(--color-primary)] hover:underline font-bold">My Saved Voices Page</button>
+            <label htmlFor="voice-id" className="block text-base font-medium">ElevenLabs Voice ID or Name</label>
+            <button onClick={onShowSaved} className="text-base text-[var(--color-primary)] hover:text-[var(--color-primary-hover)] transition-colors hover:underline font-bold">My Saved Voices</button>
         </div>
         <div className="flex gap-2">
-            <input id="voice-id" type="text" className="flex-grow p-3 text-lg rounded-lg themed-input" placeholder="e.g., 21m00Tcm4TlvDq8ikWAM" value={voiceId} onChange={(e) => { setVoiceId(e.target.value); setActiveVoice(null); setActiveSharedVoice(null); setSearchError(null); }}/>
+            <input id="voice-id" type="text" className="themed-input flex-grow p-3 text-lg rounded-lg" placeholder="e.g., 21m00Tcm4TlvDq8ikWAM" value={voiceId} onChange={(e) => { setVoiceId(e.target.value); setActiveVoice(null); setActiveSharedVoice(null); setSearchError(null); }}/>
             <button onClick={handleSearch} disabled={!voiceId.trim() || isSearching} className="flex items-center justify-center px-4 py-2 rounded-md font-bold text-lg hand-drawn-button">
-                {isSearching ? <LoadingSpinner/> : <><SearchIcon /> <span className="ml-2">Search</span></>}
+                {isSearching ? <LoadingSpinner/> : <><SearchIcon /><span className="ml-2">Search</span></>}
             </button>
         </div>
         
-        <div className="pt-2 space-y-2">
-            <p className="text-base font-medium text-[var(--color-text)]">Or select from your saved voices:</p>
-            {savedVoices.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                    {savedVoices.map(savedVoice => (
-                        <button
-                            key={savedVoice.voice_id}
-                            onClick={() => handleSelectSavedVoice(savedVoice)}
-                            className={`py-2 px-4 rounded-md text-base font-bold border-2 transition-all duration-200 ${
-                                voiceId === savedVoice.voice_id
-                                    ? 'shadow-[2px_2px_0px_var(--color-accent)]'
-                                    : 'border-[var(--color-border)]'
-                            }`}
-                             style={{
-                                backgroundColor: voiceId === savedVoice.voice_id ? 'var(--color-accent-bg)' : 'var(--color-secondary)',
-                                borderColor: voiceId === savedVoice.voice_id ? 'var(--color-accent)' : 'var(--color-border)',
-                                color: voiceId === savedVoice.voice_id ? 'var(--color-accent-text)' : 'var(--color-text)',
-                            }}
-                        >
-                            {savedVoice.customName}
-                        </button>
-                    ))}
-                </div>
-            ) : (
-                <p className="text-sm text-[var(--color-text-muted)] italic">You have no saved voices yet. Find a voice and click "Save Voice" to add one.</p>
-            )}
-        </div>
-
-        {searchError && <p className="text-base text-red-600 mt-2">{searchError}</p>}
+        {searchError && <p className="text-base text-[var(--color-error-text)] mt-2">{searchError}</p>}
       </div>
       
       {activeSharedVoice && (
-        <div className="space-y-6 p-4 rounded-lg border-2" style={{backgroundColor: 'var(--color-warning-bg-translucent)', borderColor: 'var(--color-warning-border)'}}>
+        <div className="space-y-6 p-4 bg-[var(--color-warning-bg-translucent)] rounded-lg border-2 border-[var(--color-warning-border)]">
           <div className="flex justify-between items-start">
             <div>
               <h3 className="text-2xl font-bold">{activeSharedVoice.name}</h3>
               <p className="text-sm text-[var(--color-text-muted)] capitalize">{Object.values(activeSharedVoice.labels).join(', ')}</p>
-              <p className="text-sm mt-1 font-semibold" style={{color: 'var(--color-warning-border)'}}>This is a public voice from the Voice Library.</p>
+              <p className="text-sm text-[var(--color-warning-border)] mt-1 font-semibold">This is a public voice from the Voice Library.</p>
             </div>
-            <button onClick={togglePlayPause} className="p-2 rounded-full transition-colors" style={{color: 'var(--color-warning-border)'}} aria-label={`Preview voice ${activeSharedVoice.name}`}>
+            <button onClick={togglePlayPause} className="p-2 rounded-full bg-white/50 hover:bg-[var(--color-warning-border)] text-[var(--color-warning-border)] hover:text-white transition-colors" aria-label={`Preview voice ${activeSharedVoice.name}`}>
                 {isPlaying ? <PauseIcon/> : <PlayIcon/>}
             </button>
           </div>
           <div className="text-center">
-            <p className="text-base text-[var(--color-text)] mb-2">Add this voice to your account to use it and customize its settings.</p>
-            <button onClick={handleAddVoice} disabled={isAddingVoice} className="w-full flex items-center justify-center py-2 px-4 rounded-md font-bold text-lg hand-drawn-button" style={{backgroundColor: 'var(--color-warning-border)', color: 'var(--color-bg)'}}>
-                {isAddingVoice ? <LoadingSpinner /> : <PlusIcon />}
-                <span className="ml-2">Add to My Voices</span>
+            <p className="text-base mb-2">Add this voice to your account to use it and customize its settings.</p>
+            <button onClick={handleAddVoice} disabled={isAddingVoice} className="w-full flex items-center justify-center py-2 px-4 rounded-md font-bold text-lg hand-drawn-button" style={{backgroundColor: 'var(--color-warning-border)'}}>
+                {isAddingVoice ? <LoadingSpinner /> : <><PlusIcon /><span className="ml-2">Add to My Voices</span></>}
             </button>
           </div>
         </div>
       )}
 
       {activeVoice && (
-        <div className="space-y-6 p-4 rounded-lg border-2" style={{backgroundColor: 'var(--color-accent-bg-translucent)', borderColor: 'var(--color-accent)'}}>
+        <div className="space-y-6 p-4 bg-[var(--color-accent-bg-translucent-heavy)] rounded-lg border-2 border-[var(--color-accent)]">
           <div className="flex justify-between items-start">
             <div>
               <h3 className="text-2xl font-bold">{activeVoice.name}</h3>
               <p className="text-sm text-[var(--color-text-muted)] capitalize">{Object.values(activeVoice.labels).join(', ')}</p>
             </div>
             <div className="flex items-center gap-2">
-                <button onClick={togglePlayPause} className="p-2 rounded-full transition-colors" style={{color: 'var(--color-accent-text)'}} aria-label={`Preview voice ${activeVoice.name}`}>
+                <button onClick={togglePlayPause} className="p-2 rounded-full bg-white/50 hover:bg-[var(--color-accent)] text-[var(--color-accent-text)] hover:text-white transition-colors" aria-label={`Preview voice ${activeVoice.name}`}>
                     {isPlaying ? <PauseIcon/> : <PlayIcon/>}
                 </button>
-                <button onClick={handleSave} disabled={isSaved} className="flex items-center text-base py-2 px-4 rounded-md bg-[var(--color-secondary)] text-[var(--color-secondary-text)] hand-drawn-button disabled:opacity-50 disabled:cursor-default disabled:shadow-none font-bold">
+                <button onClick={handleSave} disabled={isSaved} className="flex items-center text-base py-2 px-4 rounded-md bg-[var(--color-secondary)] text-[var(--color-secondary-text)] hand-drawn-button disabled:opacity-60 disabled:cursor-default disabled:shadow-none font-bold">
                   <SaveIcon/> {isSaved ? 'Saved!' : 'Save Voice'}
                 </button>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-              {/* UI for voice settings */}
+              {capabilities.stabilityType === 'discrete' ? (
+                <div className="md:col-span-2">
+                  <label className="block text-base font-medium mb-2">Stability</label>
+                  <div className="flex justify-center gap-2">
+                    {stabilityOptions.map(opt => (
+                      <button
+                        key={opt.value}
+                        onClick={() => handleSettingChange('stability', opt.value)}
+                        className={`py-2 px-4 rounded-md text-base font-bold border-2 transition-all duration-200 w-full ${
+                          voiceSettings.stability === opt.value
+                            ? 'bg-[var(--color-accent-bg)] border-[var(--color-accent)] text-[var(--color-accent-text)] shadow-[2px_2px_0px_var(--color-accent)]'
+                            : 'bg-white/60 border-[var(--color-border)] hover:border-gray-600'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-base font-medium">Stability ({voiceSettings.stability.toFixed(2)})</label>
+                  <input type="range" min="0" max="1" step="0.01" value={voiceSettings.stability} onChange={(e) => handleSettingChange('stability', parseFloat(e.target.value))} className="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer accent-[var(--color-accent)]"/>
+                </div>
+              )}
+              
+              {capabilities.supportsClarity && (
+                <div>
+                  <label className="block text-base font-medium">Clarity + Similarity ({voiceSettings.similarity_boost.toFixed(2)})</label>
+                  <input type="range" min="0" max="1" step="0.01" value={voiceSettings.similarity_boost} onChange={(e) => handleSettingChange('similarity_boost', parseFloat(e.target.value))} className="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer accent-[var(--color-accent)]"/>
+                </div>
+              )}
+
+              {capabilities.supportsStyle && (
+                <div>
+                  <label className="block text-base font-medium">Style Exaggeration ({voiceSettings.style?.toFixed(2) || '0.00'})</label>
+                  <input type="range" min="0" max="1" step="0.01" value={voiceSettings.style || 0} onChange={(e) => handleSettingChange('style', parseFloat(e.target.value))} className="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer accent-[var(--color-accent)]"/>
+                </div>
+              )}
+              
+              {capabilities.supportsSpeakerBoost && (
+                <div className="flex items-center justify-between pt-3">
+                   <label className="text-base font-medium">Speaker Boost</label>
+                   <label htmlFor="speaker-boost" className="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" id="speaker-boost" className="sr-only peer" checked={!!voiceSettings.use_speaker_boost} onChange={(e) => handleSettingChange('use_speaker_boost', e.target.checked)} />
+                      <div className="w-11 h-6 bg-gray-400 rounded-full peer peer-focus:ring-2 peer-focus:ring-[var(--color-accent)] peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--color-accent)]"></div>
+                  </label>
+                </div>
+              )}
           </div>
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row-reverse gap-4 pt-6 border-t-2 border-[var(--color-border)]">
-        <button onClick={onGenerate} disabled={!activeVoice} className="w-full flex justify-center py-3 px-4 rounded-md text-2xl font-bold hand-drawn-button">Generate Voiceovers</button>
-        <button onClick={onBack} className="w-full flex justify-center py-3 px-4 rounded-md text-2xl font-bold hand-drawn-button bg-[var(--color-secondary)] text-[var(--color-secondary-text)]">Back</button>
+      <div className="flex flex-col sm:flex-row-reverse gap-4 pt-6 border-t-2 border-gray-300">
+        <button onClick={onGenerate} disabled={!activeVoice} className="w-full flex justify-center py-3 px-4 rounded-md text-2xl font-bold text-white hand-drawn-button">Generate Voiceovers</button>
+        <button onClick={onBack} className="w-full flex justify-center py-3 px-4 rounded-md text-2xl font-bold text-black hand-drawn-button bg-[var(--color-secondary)]">Back</button>
       </div>
     </div>
   );

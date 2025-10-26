@@ -1,33 +1,32 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import ScriptInput from './components/ScriptInput';
 import Configurator from './components/Configurator';
 import ResultsDisplay from './components/ResultsDisplay';
+import ApiKeyInput from './components/ApiKeyInput';
 import SavedVoices from './components/SavedVoices';
-import ParagraphCountInput from './components/WordCountInput';
+import ParagraphCountInput from './components/WordCountInput'; // Renamed internally, file path is the same
 import ModelSelector from './components/ModelSelector';
 import Instructions from './components/Instructions';
 import History from './components/History';
-import Login from './components/Login';
 import { generateVoiceover } from './services/elevenLabsService';
 import type { AudioResult, SavedVoice, VoiceSettings, HistoryItem } from './types';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
-import { useAuth } from './contexts/AuthContext';
-import { supabase } from './supabaseClient';
 import { useLocalStorage } from './hooks/useLocalStorage';
 
-type Step = 'script' | 'paragraphCount' | 'modelSelection' | 'config' | 'savedVoices' | 'results';
+type Step = 'script' | 'paragraphCount' | 'apiKey' | 'modelSelection' | 'config' | 'savedVoices' | 'results';
 type View = 'app' | 'instructions' | 'history';
+type ApiKeyEntryReason = 'initial' | 'switch';
 
 const App: React.FC = () => {
-  const { session, user } = useAuth();
   const [step, setStep] = useState<Step>('script');
   const [view, setView] = useState<View>('app');
   const [script, setScript] = useState<string>('');
   
-  const [savedVoices, setSavedVoices] = useState<SavedVoice[]>([]);
-  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [apiKey, setApiKey] = useLocalStorage<string>('elevenLabsApiKey', '');
+  const [savedVoices, setSavedVoices] = useLocalStorage<SavedVoice[]>('elevenLabsSavedVoices', []);
   const [modelId, setModelId] = useLocalStorage<string>('elevenLabsModelId', 'eleven_multilingual_v2');
+  const [history, setHistory] = useLocalStorage<HistoryItem[]>('elevenLabsHistory', []);
   
   const [paragraphsPerChunk, setParagraphsPerChunk] = useState<number>(1);
   const [voiceId, setVoiceId] = useState<string>('');
@@ -43,75 +42,20 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
+  const [apiKeyEntryReason, setApiKeyEntryReason] = useState<ApiKeyEntryReason>('initial');
+  const [stepBeforeApiKeySwitch, setStepBeforeApiKeySwitch] = useState<Step>('script');
 
-  useEffect(() => {
-    // This effect is responsible for fetching user-specific data once they are logged in.
-    // It is wrapped in a safe, async, self-invoking function to handle errors gracefully.
-    const fetchUserData = async () => {
-        if (user) {
-            try {
-                // Fetch saved voices and history in parallel for efficiency
-                const [voicesResponse, historyResponse] = await Promise.all([
-                    supabase.from('saved_voices').select('*').eq('user_id', user.id),
-                    supabase.from('history').select('*').eq('user_id', user.id).order('createdAt', { ascending: false }).limit(50)
-                ]);
 
-                if (voicesResponse.error) throw voicesResponse.error;
-                setSavedVoices(voicesResponse.data as SavedVoice[] || []);
-
-                if (historyResponse.error) throw historyResponse.error;
-                setHistory(historyResponse.data as HistoryItem[] || []);
-
-            } catch (err) {
-                const message = err instanceof Error ? err.message : "An unknown error occurred."
-                console.error('Error fetching user data:', message);
-                setError(`Failed to load user data: ${message}`);
-            }
-        }
-    };
-
-    fetchUserData();
-  }, [user]);
-
-  const handleAddSavedVoice = async (voice: Omit<SavedVoice, 'id' | 'user_id'>) => {
-    if (!user) return;
-    
-    const voiceToSave = {
-        ...voice,
-        user_id: user.id
-    };
-
-    const { data, error } = await supabase
-        .from('saved_voices')
-        .upsert(voiceToSave, { onConflict: 'user_id,voice_id' })
-        .select()
-        .single();
-    
-    if (error) {
-        setError(error.message);
-        console.error("Error saving voice: ", error);
-    } else if (data) {
-        setSavedVoices(currentVoices => {
-            const existingIndex = currentVoices.findIndex(v => v.voice_id === voice.voice_id);
-            if (existingIndex > -1) {
-                const newVoices = [...currentVoices];
-                newVoices[existingIndex] = data as SavedVoice;
-                return newVoices;
-            } else {
-                return [...currentVoices, data as SavedVoice];
-            }
-        });
+  const handleAddSavedVoice = (voice: SavedVoice) => {
+    if (!savedVoices.some(v => v.voice_id === voice.voice_id)) {
+      setSavedVoices([...savedVoices, voice]);
+    } else {
+      setSavedVoices(savedVoices.map(v => v.voice_id === voice.voice_id ? voice : v));
     }
   };
 
-  const handleRemoveSavedVoice = async (voice_id: string) => {
-    if (!user) return;
-    const { error } = await supabase.from('saved_voices').delete().match({ voice_id: voice_id, user_id: user.id });
-    if (error) {
-      setError(error.message);
-    } else {
-      setSavedVoices(savedVoices.filter(v => v.voice_id !== voice_id));
-    }
+  const handleRemoveSavedVoice = (voice_id: string) => {
+    setSavedVoices(savedVoices.filter(v => v.voice_id !== voice_id));
   };
   
   const handleSelectSavedVoice = (voice: SavedVoice) => {
@@ -122,19 +66,22 @@ const App: React.FC = () => {
 
   const splitScriptByParagraphs = (text: string, paragraphsPerChunk: number): string[] => {
     if (!text.trim() || paragraphsPerChunk <= 0) return [];
+  
     const paragraphs = text.split(/\n+/).filter(p => p.trim() !== '');
     if (paragraphs.length === 0) return [];
+  
     const chunks: string[] = [];
     for (let i = 0; i < paragraphs.length; i += paragraphsPerChunk) {
       const chunkParagraphs = paragraphs.slice(i, i + paragraphsPerChunk);
       chunks.push(chunkParagraphs.join('\n\n'));
     }
+  
     return chunks;
   };
 
   const handleGenerate = useCallback(async () => {
-    if (!voiceId || !modelId) {
-      setError("Voice ID and a Model must be set before generating.");
+    if (!voiceId || !apiKey || !modelId) {
+      setError("Voice ID, API Key, and a Model must be set before generating.");
       return;
     }
     setIsLoading(true);
@@ -157,6 +104,7 @@ const App: React.FC = () => {
         const chunk = textChunks[i];
         setProgress({ current: i + 1, total: textChunks.length });
 
+        // FIX: The `apiKey` argument is no longer required for `generateVoiceover`.
         const result = await generateVoiceover(chunk, voiceId, voiceSettings, modelId, previousRequestId);
         
         const audioUrl = URL.createObjectURL(result.blob);
@@ -167,33 +115,24 @@ const App: React.FC = () => {
         previousRequestId = result.requestId;
       }
 
-      if (user && collectedAudioResults.length > 0) {
+      if (collectedAudioResults.length > 0) {
         const combinedBlob = new Blob(collectedAudioResults.map(f => f.blob), { type: 'audio/mpeg' });
         const name = script.trim().split(/\s+/).slice(0, 5).join(' ') + (script.trim().split(/\s+/).length > 5 ? '...' : '');
-
-        const fileName = `${user.id}/${Date.now()}.mp3`;
-        const { error: uploadError } = await supabase.storage.from('history-audio').upload(fileName, combinedBlob);
-        
-        if (uploadError) {
-            console.error('Error uploading audio:', uploadError);
-            setError(`Failed to save audio to history: ${uploadError.message}`);
-        } else {
-            const { data: { publicUrl } } = supabase.storage.from('history-audio').getPublicUrl(fileName);
-            if (publicUrl) {
-                const newItem = {
-                    user_id: user.id,
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const dataUrl = event.target?.result as string;
+            if (dataUrl) {
+                // FIX: The `id` property should be a string, and `audioDataUrl` should be `audioUrl`.
+                const newItem: HistoryItem = {
+                    id: Date.now().toString(),
                     name: name || "Untitled Voiceover",
                     createdAt: new Date().toISOString(),
-                    audioUrl: publicUrl,
+                    audioUrl: dataUrl,
                 };
-                const { data: historyData, error: historyError } = await supabase.from('history').insert(newItem).select().single();
-                if (historyError) {
-                    console.error('Error saving history record:', historyError);
-                } else if (historyData) {
-                    setHistory(prev => [historyData as HistoryItem, ...prev.slice(0, 49)]);
-                }
+                setHistory(prev => [newItem, ...prev.slice(0, 49)]); // Prepend and limit history size
             }
-        }
+        };
+        reader.readAsDataURL(combinedBlob);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred during voice generation.');
@@ -201,21 +140,33 @@ const App: React.FC = () => {
       setIsLoading(false);
       setProgress(null);
     }
-  }, [script, paragraphsPerChunk, voiceId, voiceSettings, modelId, user]);
+  }, [script, paragraphsPerChunk, voiceId, apiKey, voiceSettings, modelId, setHistory]);
 
-  const handleRemoveHistoryItem = async (id: string) => {
-    if (!user) return;
-    // We can also remove the file from storage, but for simplicity, we'll just remove the DB record.
-    const { error } = await supabase.from('history').delete().match({ id, user_id: user.id });
-    if (error) {
-        setError(`Failed to delete history item: ${error.message}`);
+  const handleScriptNext = () => setStep('paragraphCount');
+  
+  const handleParagraphCountNext = () => {
+    if (apiKey) {
+      setStep('modelSelection');
     } else {
-        setHistory(prev => prev.filter(item => item.id !== id));
+      setApiKeyEntryReason('initial');
+      setStep('apiKey');
     }
   };
 
-  const handleScriptNext = () => setStep('paragraphCount');
-  const handleParagraphCountNext = () => setStep('modelSelection');
+  const handleApiKeyNext = () => {
+    if (apiKeyEntryReason === 'switch') {
+        setStep(stepBeforeApiKeySwitch); // Return to the step before switching
+    } else {
+        setStep('modelSelection');
+    }
+  };
+  
+  const handleApiKeyBack = () => {
+    // For 'switch' mode, "back" should return to where the user was.
+    // For 'initial' mode, there's no logical back step, so we can disable it or go to paragraph count.
+    setStep(apiKeyEntryReason === 'switch' ? stepBeforeApiKeySwitch : 'paragraphCount');
+  };
+
   const handleModelSelectionNext = () => setStep('config');
 
   const handleReset = () => {
@@ -229,12 +180,19 @@ const App: React.FC = () => {
     setView('app');
   }
 
+  const handleSwitchApiKey = () => {
+    setStepBeforeApiKeySwitch(step === 'apiKey' ? 'config' : step);
+    setApiKeyEntryReason('switch');
+    setView('app');
+    setStep('apiKey');
+  };
+
   const renderContent = () => {
     if (view === 'instructions') {
         return <Instructions onBack={() => setView('app')} />;
     }
     if (view === 'history') {
-      return <History history={history} onRemove={handleRemoveHistoryItem} onBack={() => setView('app')} />;
+      return <History history={history} setHistory={setHistory} onBack={() => setView('app')} />;
     }
 
     switch (step) {
@@ -242,11 +200,22 @@ const App: React.FC = () => {
         return <ScriptInput script={script} setScript={setScript} onNext={handleScriptNext} />;
       case 'paragraphCount':
         return <ParagraphCountInput paragraphsPerChunk={paragraphsPerChunk} setParagraphsPerChunk={setParagraphsPerChunk} onNext={handleParagraphCountNext} onBack={() => setStep('script')} />;
+      case 'apiKey':
+        return (
+          <ApiKeyInput
+            apiKey={apiKey}
+            setApiKey={setApiKey}
+            onNext={handleApiKeyNext}
+            entryReason={apiKeyEntryReason}
+            onBack={handleApiKeyBack}
+          />
+        );
       case 'modelSelection':
         return <ModelSelector selectedModel={modelId} setSelectedModel={setModelId} onNext={handleModelSelectionNext} onBack={() => setStep('paragraphCount')} />;
       case 'config':
         return (
           <Configurator
+            apiKey={apiKey}
             modelId={modelId}
             voiceId={voiceId}
             setVoiceId={setVoiceId}
@@ -285,9 +254,9 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Header view={view} setView={setView} />
+      <Header view={view} setView={setView} onSwitchApiKey={handleSwitchApiKey} />
       <main className="flex-grow container mx-auto p-4 sm:p-6 lg:p-8 flex flex-col items-center justify-center max-w-6xl w-full">
-        {!session ? <Login /> : renderContent()}
+        {renderContent()}
       </main>
       <Footer />
     </div>
