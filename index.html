@@ -10,17 +10,83 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&display=swap" rel="stylesheet">
 <style>
+  :root {
+    --color-bg: #f4f1ea;
+    --color-text: #3a3a3a;
+    --color-text-muted: #708070;
+    --color-border: #1a1a1a;
+    --color-primary: #9cb89c;
+    --color-primary-hover: #8aa78a;
+    --color-primary-text: #ffffff;
+    --color-secondary: #e0dcd3;
+    --color-secondary-hover: #d1ccc4;
+    --color-secondary-text: #1a1a1a;
+    --color-accent: #5f9ea0;
+    --color-accent-text: #2a5f60;
+    --color-accent-bg: #e0f5f5;
+    --color-accent-bg-translucent: rgba(224, 245, 245, 0.6);
+    --color-accent-bg-translucent-heavy: rgba(224, 245, 245, 0.8);
+    --color-warning-bg-translucent: rgba(255, 251, 224, 0.6);
+    --color-warning-border: #c9a22a;
+    --color-error-bg: #ffebee;
+    --color-error-text: #c62828;
+    --color-error-border: #e53935;
+    --color-scroll-container-bg: #f0f5f0;
+    --color-scroll-container-bg-translucent: rgba(240, 245, 240, 0.5);
+    --color-scroll-ends-bg: #e0dcd3;
+    --pattern-fill-light: #e5e1d7;
+    --pattern-fill-dark: #3a3a3a;
+    --shadow-color: #1a1a1a;
+    --input-bg: #ffffff;
+    --input-placeholder: #a0aec0;
+  }
+
+  html.dark {
+    --color-bg: #2d2d2d;
+    --color-text: #e5e1d7;
+    --color-text-muted: #a0a0a0;
+    --color-border: #f4f1ea;
+    --color-primary: #7a9f7a;
+    --color-primary-hover: #8fb08f;
+    --color-primary-text: #ffffff;
+    --color-secondary: #4a4a4a;
+    --color-secondary-hover: #5a5a5a;
+    --color-secondary-text: #e5e1d7;
+    --color-accent: #6fb0b2;
+    --color-accent-text: #b2dfe0;
+    --color-accent-bg: #2a3a3a;
+    --color-accent-bg-translucent: rgba(42, 58, 58, 0.6);
+    --color-accent-bg-translucent-heavy: rgba(42, 58, 58, 0.8);
+    --color-warning-bg-translucent: rgba(68, 63, 41, 0.6);
+    --color-warning-border: #e6b930;
+    --color-error-bg: #4c1b1b;
+    --color-error-text: #ff8a80;
+    --color-error-border: #ef5350;
+    --color-scroll-container-bg: #3a3a3a;
+    --color-scroll-container-bg-translucent: rgba(58, 58, 58, 0.5);
+    --color-scroll-ends-bg: #4a4a4a;
+    --shadow-color: #000000;
+    --input-bg: #4a4a4a;
+    --input-placeholder: #718096;
+  }
+
   body {
     font-family: 'Kalam', cursive;
-    background-color: #f4f1ea;
-    color: #3a3a3a;
-    background-image: url('data:image/svg+xml;utf8,<svg width="100" height="20" viewBox="0 0 100 20" xmlns="http://www.w3.org/2000/svg"><path d="M20 20c-5.523 0-10-4.477-10-10S14.477 0 20 0s10 4.477 10 10-4.477 10-10 10zm-20 0c-5.523 0-10-4.477-10-10S-5.523 0 0 0s10 4.477 10 10-4.477 10-10 10zM60 20c-5.523 0-10-4.477-10-10S54.477 0 60 0s10 4.477 10 10-4.477 10-10 10zm-20 0c-5.523 0-10-4.477-10-10S34.477 0 40 0s10 4.477 10 10-4.477 10-10 10zM100 20c-5.523 0-10-4.477-10-10S94.477 0 100 0s10 4.477 10 10-4.477 10-10 10zm-20 0c-5.523 0-10-4.477-10-10S74.477 0 80 0s10 4.477 10 10-4.477 10-10 10z" fill="%23e5e1d7" fill-opacity="0.4" fill-rule="evenodd"></path></svg>');
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    background-image: url('data:image/svg+xml;utf8,<svg width="100" height="20" viewBox="0 0 100 20" xmlns="http://www.w3.org/2000/svg"><path d="M20 20c-5.523 0-10-4.477-10-10S14.477 0 20 0s10 4.477 10 10-4.477 10-10 10zm-20 0c-5.523 0-10-4.477-10-10S-5.523 0 0 0s10 4.477 10 10-4.477 10-10 10zM60 20c-5.523 0-10-4.477-10-10S54.477 0 60 0s10 4.477 10 10-4.477 10-10 10zm-20 0c-5.523 0-10-4.477-10-10S34.477 0 40 0s10 4.477 10 10-4.477 10-10 10zM100 20c-5.523 0-10-4.477-10-10S94.477 0 100 0s10 4.477 10 10-4.477 10-10 10zm-20 0c-5.523 0-10-4.477-10-10S74.477 0 80 0s10 4.477 10 10-4.477 10-10 10z" fill_color="%23e5e1d7" fill-opacity="0.4" fill-rule="evenodd"></path></svg>'.replace('fill_color', encodeURIComponent(getComputedStyle(document.documentElement).getPropertyValue('--pattern-fill-light'))));
     background-repeat: repeat;
+    transition: background-color 0.3s ease, color 0.3s ease;
   }
+
+  html.dark body {
+     background-image: url('data:image/svg+xml;utf8,<svg width="100" height="20" viewBox="0 0 100 20" xmlns="http://www.w3.org/2000/svg"><path d="M20 20c-5.523 0-10-4.477-10-10S14.477 0 20 0s10 4.477 10 10-4.477 10-10 10zm-20 0c-5.523 0-10-4.477-10-10S-5.523 0 0 0s10 4.477 10 10-4.477 10-10 10zM60 20c-5.523 0-10-4.477-10-10S54.477 0 60 0s10 4.477 10 10-4.477 10-10 10zm-20 0c-5.523 0-10-4.477-10-10S34.477 0 40 0s10 4.477 10 10-4.477 10-10 10zM100 20c-5.523 0-10-4.477-10-10S94.477 0 100 0s10 4.477 10 10-4.477 10-10 10zm-20 0c-5.523 0-10-4.477-10-10S74.477 0 80 0s10 4.477 10 10-4.477 10-10 10z" fill_color="%233a3a3a" fill-opacity="0.4" fill-rule="evenodd"></path></svg>'.replace('fill_color', encodeURIComponent(getComputedStyle(document.documentElement).getPropertyValue('--pattern-fill-dark'))));
+  }
+
   .scroll-container {
-    background-color: #f0f5f0;
-    border: 3px solid #1a1a1a;
-    box-shadow: 5px 5px 0px #1a1a1a;
+    background-color: var(--color-scroll-container-bg);
+    border: 3px solid var(--color-border);
+    box-shadow: 5px 5px 0px var(--shadow-color);
     position: relative;
     padding: 2rem;
   }
@@ -30,11 +96,11 @@
     left: 0;
     right: 0;
     height: 25px; /* Adjust height of the scroll ends */
-    background: #e0dcd3;
-    border: 3px solid #1a1a1a;
-    border-top: 1px solid #1a1a1a;
-    border-bottom: 1px solid #1a1a1a;
-    box-shadow: 0 2px 0 #1a1a1a, 0 -2px 0 #1a1a1a;
+    background: var(--color-scroll-ends-bg);
+    border: 3px solid var(--color-border);
+    border-top: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--color-border);
+    box-shadow: 0 2px 0 var(--shadow-color), 0 -2px 0 var(--shadow-color);
   }
   .scroll-container::before {
     top: -15px;
@@ -45,37 +111,56 @@
     border-radius: 0 0 10px 10px;
   }
   .hand-drawn-button {
-    background-color: #9cb89c;
-    border: 3px solid #1a1a1a;
-    box-shadow: 4px 4px 0px #1a1a1a;
+    background-color: var(--color-primary);
+    border: 3px solid var(--color-border);
+    box-shadow: 4px 4px 0px var(--shadow-color);
     transition: all 0.1s ease-in-out;
+    color: var(--color-primary-text);
   }
   .hand-drawn-button:hover:not(:disabled) {
     transform: translate(2px, 2px);
-    box-shadow: 2px 2px 0px #1a1a1a;
+    box-shadow: 2px 2px 0px var(--shadow-color);
   }
   .hand-drawn-button:active:not(:disabled) {
     transform: translate(4px, 4px);
-    box-shadow: 0px 0px 0px #1a1a1a;
+    box-shadow: 0px 0px 0px var(--shadow-color);
   }
   .hand-drawn-button:disabled {
-    background-color: #b0c0b0;
-    color: #708070;
+    background-color: var(--color-text-muted);
+    color: var(--color-bg);
     cursor: not-allowed;
     box-shadow: none;
+    opacity: 0.7;
   }
   .hand-drawn-tab {
-    background-color: #e0dcd3;
-    border: 3px solid #1a1a1a;
+    background-color: var(--color-secondary);
+    color: var(--color-secondary-text);
+    border: 3px solid var(--color-border);
     border-bottom: none;
     border-radius: 10px 10px 0 0;
     box-shadow: inset 0px 2px 3px rgba(0,0,0,0.1);
   }
   .hand-drawn-tab.active {
-    background-color: #9cb89c;
+    background-color: var(--color-primary);
+    color: var(--color-primary-text);
     padding-bottom: 3px;
     margin-bottom: -3px;
   }
+
+  /* Input styles */
+  .themed-input {
+    background-color: var(--input-bg);
+    border: 2px solid var(--color-border);
+    color: var(--color-text);
+  }
+  .themed-input::placeholder {
+    color: var(--input-placeholder);
+  }
+  .themed-input:focus {
+    --tw-ring-color: var(--color-primary);
+    border-color: var(--color-primary);
+  }
+  
 </style>
 <script type="importmap">
 {

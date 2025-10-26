@@ -26,27 +26,30 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     // 2. Perform a robust, one-time check of the session on initial app load.
+    // This is the critical step to prevent "stale sessions".
     const checkInitialSession = async () => {
       try {
-        // getUser() makes a network request to Supabase to validate the user's token.
-        // This is crucial for detecting stale sessions (e.g., when a user is deleted from the backend).
+        // `getUser()` makes a network request to the Supabase server to validate the user's token.
+        // This is crucial for detecting if a session is invalid because the user was deleted,
+        // their session was manually revoked, or the token has expired. It does not rely on browser storage.
         const { data: { user: currentUser } } = await supabase.auth.getUser();
 
         if (currentUser) {
-          // If the user is valid, we can get the full session object, which will be available from storage.
+          // If the server confirms the user is valid, we can then get the full session object.
+          // `getSession()` is safe to use here because we've already validated the user.
           const { data: { session: currentSession } } = await supabase.auth.getSession();
           setSession(currentSession);
           setUser(currentSession?.user ?? null);
         } else {
-          // If getUser() returns no user, it means the session is invalid.
-          // Explicitly sign out to clear any local storage artifacts.
+          // If `getUser()` returns no user, it definitively means the session is invalid.
+          // We must explicitly sign out to clear any potentially stale session data from browser local storage.
           await supabase.auth.signOut();
           setSession(null);
           setUser(null);
         }
       } catch (error) {
         console.error("Error checking initial session:", error);
-        // In case of an error, ensure the user is logged out for safety.
+        // In case of a network or other error, it's safest to assume the user is logged out.
         await supabase.auth.signOut();
         setSession(null);
         setUser(null);
@@ -57,7 +60,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     checkInitialSession();
 
-    // 3. Unsubscribe from the listener when the component unmounts.
+    // 3. Unsubscribe from the listener when the component unmounts to prevent memory leaks.
     return () => {
       subscription?.unsubscribe();
     };
@@ -69,8 +72,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // This prevents the main app from rendering with a potentially incorrect auth state.
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f4f1ea]">
-        <div className="animate-spin rounded-full h-32 w-32 border-t-4 border-b-4 border-[#9cb89c]"></div>
+      <div className="min-h-screen flex items-center justify-center bg-[var(--color-bg)]">
+        <div className="animate-spin rounded-full h-32 w-32 border-t-4 border-b-4 border-[var(--color-primary)]"></div>
       </div>
     );
   }

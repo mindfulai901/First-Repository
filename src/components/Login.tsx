@@ -16,8 +16,12 @@ const Login: React.FC = () => {
             const { error } = await supabase.auth.signInWithOAuth({
                 provider: 'google',
                 options: {
-                    // This should dynamically resolve to http://localhost:3000 in dev
                     redirectTo: window.location.origin,
+                    // By adding 'prompt: consent', we ensure the user is always
+                    // shown the Google authorization screen, even if they've logged in before.
+                    queryParams: {
+                        prompt: 'consent',
+                    },
                 },
             });
             if (error) {
@@ -36,12 +40,12 @@ const Login: React.FC = () => {
     return (
         <div className="w-full max-w-md p-8 space-y-8 scroll-container text-center">
             <h2 className="text-4xl font-bold">Welcome!</h2>
-            <p className="mt-2 text-lg text-gray-600">
+            <p className="mt-2 text-lg text-[var(--color-text-muted)]">
                 Sign in to save your voices and access your generation history across devices.
             </p>
             <button
                 onClick={handleGoogleLogin}
-                className="w-full flex items-center justify-center py-3 px-4 rounded-md text-xl font-bold text-black hand-drawn-button bg-white border-gray-400 hover:bg-gray-100"
+                className="w-full flex items-center justify-center py-3 px-4 rounded-md text-xl font-bold text-black hand-drawn-button bg-white border-[var(--color-border)] hover:bg-gray-100"
             >
                 <GoogleIcon />
                 Sign in with Google
