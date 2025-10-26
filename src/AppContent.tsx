@@ -266,7 +266,6 @@ export const AppContent: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col relative">
-      <div style={{position: 'fixed', top: 0, left: 0, background: 'red', color: 'white', padding: '5px', zIndex: 9999, fontSize: '12px', fontWeight: 'bold'}}>DEBUG: NEW VERSION LOADED</div>
       <Header view={view} setView={setView} />
       <main className="flex-grow container mx-auto p-4 sm:p-6 lg:p-8 flex flex-col items-center justify-center max-w-6xl w-full">
         {renderContent()}
