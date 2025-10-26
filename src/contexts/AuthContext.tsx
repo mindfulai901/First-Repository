@@ -20,6 +20,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
+      // Once the auth state is determined, we are no longer loading.
+      // This handles live logins/logouts after the initial load.
+      setLoading(false);
     });
 
     // 2. Perform a robust, one-time check of the session on initial app load.
@@ -27,11 +30,24 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       try {
         // getUser() makes a network request to Supabase to validate the user's token.
         // This is crucial for detecting stale sessions (e.g., when a user is deleted from the backend).
-        const { data: { session } } = await supabase.auth.getSession();
-        setSession(session);
-        setUser(session?.user ?? null);
+        const { data: { user: currentUser } } = await supabase.auth.getUser();
+
+        if (currentUser) {
+          // If the user is valid, we can get the full session object, which will be available from storage.
+          const { data: { session: currentSession } } = await supabase.auth.getSession();
+          setSession(currentSession);
+          setUser(currentSession?.user ?? null);
+        } else {
+          // If getUser() returns no user, it means the session is invalid.
+          // Explicitly sign out to clear any local storage artifacts.
+          await supabase.auth.signOut();
+          setSession(null);
+          setUser(null);
+        }
       } catch (error) {
         console.error("Error checking initial session:", error);
+        // In case of an error, ensure the user is logged out for safety.
+        await supabase.auth.signOut();
         setSession(null);
         setUser(null);
       } finally {
