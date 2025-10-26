@@ -6,15 +6,13 @@ import DevServerCheck from './components/DevServerCheck';
 
 const App: React.FC = () => {
   return (
-    <React.StrictMode>
-      <DevServerCheck>
-        <AuthProvider>
-          <ThemeProvider>
-            <AppContent />
-          </ThemeProvider>
-        </AuthProvider>
-      </DevServerCheck>
-    </React.StrictMode>
+    <DevServerCheck>
+      <AuthProvider>
+        <ThemeProvider>
+          <AppContent />
+        </ThemeProvider>
+      </AuthProvider>
+    </DevServerCheck>
   );
 };
 
