@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { getModels } from '../services/elevenLabsService';
 import type { Model } from '../types';
@@ -114,7 +115,7 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ selectedModel, setSelecte
   return (
     <div className="w-full max-w-4xl p-8 space-y-6 scroll-container">
       <div className="text-center">
-        <h2 className="text-4xl font-bold">Step 3: Select a Model</h2>
+        <h2 className="text-4xl font-bold">Step 2: Select a Model</h2>
         <p className="mt-2 text-lg text-gray-600">
           Choose the model for voice generation. Your choice will be remembered.
         </p>

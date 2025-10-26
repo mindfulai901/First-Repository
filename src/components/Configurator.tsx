@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { getVoice, searchSharedVoices, addSharedVoice, ApiError, getModelCapabilities } from '../services/elevenLabsService';
 import type { Voice, SavedVoice, VoiceSettings, SharedVoice } from '../types';
@@ -11,7 +12,7 @@ interface ConfiguratorProps {
   setVoiceId: (id: string) => void;
   voiceSettings: VoiceSettings;
   setVoiceSettings: (settings: VoiceSettings) => void;
-  onGenerate: () => void;
+  onNext: () => void;
   onBack: () => void;
   onShowSaved: () => void;
   savedVoices: SavedVoice[];
@@ -27,7 +28,7 @@ const PauseIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w
 
 
 const Configurator: React.FC<ConfiguratorProps> = ({
-  modelId, voiceId, setVoiceId, voiceSettings, setVoiceSettings, onGenerate, onBack, onShowSaved, savedVoices, setSavedVoices
+  modelId, voiceId, setVoiceId, voiceSettings, setVoiceSettings, onNext, onBack, onShowSaved, savedVoices, setSavedVoices
 }) => {
   const { user } = useAuth();
   const [activeVoice, setActiveVoice] = useState<Voice | null>(null);
@@ -202,7 +203,7 @@ const Configurator: React.FC<ConfiguratorProps> = ({
   return (
     <div className="w-full max-w-4xl p-8 space-y-6 scroll-container">
       <div className="text-center">
-        <h2 className="text-4xl font-bold">Step 4: Configure Voice</h2>
+        <h2 className="text-4xl font-bold">Step 3: Configure Voice</h2>
         <p className="mt-2 text-lg text-[var(--color-text-muted)]">Find a voice and fine-tune its settings.</p>
       </div>
 
@@ -314,7 +315,9 @@ const Configurator: React.FC<ConfiguratorProps> = ({
       )}
 
       <div className="flex flex-col sm:flex-row-reverse gap-4 pt-6 border-t-2 border-gray-300">
-        <button onClick={onGenerate} disabled={!activeVoice} className="w-full flex justify-center py-3 px-4 rounded-md text-2xl font-bold text-white hand-drawn-button">Generate Voiceovers</button>
+        <button onClick={onNext} disabled={!activeVoice} className="w-full flex justify-center py-3 px-4 rounded-md text-2xl font-bold text-white hand-drawn-button">
+          Next: Provide Script(s)
+        </button>
         <button onClick={onBack} className="w-full flex justify-center py-3 px-4 rounded-md text-2xl font-bold text-black hand-drawn-button bg-[var(--color-secondary)]">Back</button>
       </div>
     </div>

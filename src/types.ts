@@ -1,3 +1,4 @@
+
 export interface AudioResult {
   id: number;
   audioUrl: string;
@@ -74,4 +75,22 @@ export interface HistoryItem {
   name: string;
   createdAt: string;
   audioUrl: string; // Public URL to the audio file in Supabase Storage
+}
+
+// Represents a batch job for generating multiple voiceovers
+export interface BatchJob {
+  id: string; // Supabase DB id
+  user_id?: string;
+  created_at: string;
+  script_content: string;
+  original_filename: string;
+  status: 'queued' | 'processing' | 'completed' | 'error';
+  final_audio_url?: string | null;
+  error_message?: string | null;
+  voice_settings: VoiceSettings;
+  voice_id: string;
+  model_id: string;
+  paragraphs_per_chunk: number;
+  // Local state for UI
+  progress?: { current: number; total: number } | null;
 }
