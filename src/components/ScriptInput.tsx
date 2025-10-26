@@ -17,7 +17,7 @@ const ScriptInput: React.FC<ScriptInputProps> = ({ script, setScript, onFilesCha
 
     const handleFileDrop = (files: FileList | null) => {
       if (!files) return;
-      const textFiles = Array.from(files).filter(file => file.type === 'text/plain');
+      const textFiles = Array.from(files).filter(file => file.type === 'text/plain' || file.name.endsWith('.txt'));
       setStagedFiles(textFiles);
       onFilesChange(textFiles);
     };
@@ -50,7 +50,7 @@ const ScriptInput: React.FC<ScriptInputProps> = ({ script, setScript, onFilesCha
                     onDrop={(e) => { e.preventDefault(); handleFileDrop(e.dataTransfer.files); }}
                     onClick={() => fileInputRef.current?.click()}
                 >
-                    <input type="file" multiple accept=".txt" ref={fileInputRef} onChange={(e) => handleFileDrop(e.target.files)} className="hidden" />
+                    <input type="file" multiple accept=".txt,text/plain" ref={fileInputRef} onChange={(e) => handleFileDrop(e.target.files)} className="hidden" />
                     <UploadIcon />
                     {stagedFiles.length === 0 ? (
                         <>
