@@ -181,59 +181,28 @@ export const AppContent: React.FC = () => {
     }
   };
   
-  const processSingleBatchJob = async (job: BatchJob): Promise<string> => {
-    if (!user) throw new Error("User not authenticated.");
-
-    const textChunks = splitScriptByParagraphs(job.script_content, job.paragraphs_per_chunk);
-    if (textChunks.length === 0) throw new Error("Script is empty.");
-
-    const collectedBlobs: Blob[] = [];
-    let previousRequestId: string | undefined = undefined;
-
-    for (let i = 0; i < textChunks.length; i++) {
-        setBatchJobs(prev => prev.map(j => 
-            j.id === job.id 
-            ? { ...j, progress: { current: i + 1, total: textChunks.length } } 
-            : j
-        ));
-        const result = await generateVoiceover(textChunks[i], job.voice_id, job.voice_settings, job.model_id, previousRequestId);
-        collectedBlobs.push(result.blob);
-        previousRequestId = result.requestId;
-    }
-
-    const combinedBlob = new Blob(collectedBlobs, { type: 'audio/mpeg' });
-    const fileName = `${user.id}/${job.id}.mp3`;
-
-    const { error: uploadError } = await supabase.storage.from('batch_audio').upload(fileName, combinedBlob, { upsert: true });
-    if (uploadError) throw new Error(`Storage Error: ${uploadError.message}`);
-
-    const { data: { publicUrl } } = supabase.storage.from('batch_audio').getPublicUrl(fileName);
-    if (!publicUrl) throw new Error('Could not get public URL.');
-
-    return publicUrl;
-  };
-
   const handleBatchGenerate = async () => {
     if (!user || stagedFiles.length === 0) return;
-    setIsLoading(true);
+
+    setStep('results');
     setError(null);
     setAudioFiles([]);
-    setBatchJobs([]);
-    setStep('results');
-
-    const filePromises = stagedFiles.map(file => {
-        return new Promise<{ name: string, content: string }>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = (e) => resolve({ name: file.name, content: e.target?.result as string });
-            reader.onerror = () => reject(new Error(`Failed to read file ${file.name}`));
-            reader.readAsText(file);
-        });
-    });
+    setIsLoading(false); // We show progress per-item, not a single loading screen
 
     try {
-        const fileContents = await Promise.all(filePromises);
-        const newJobsData: Omit<BatchJob, 'id' | 'created_at'>[] = fileContents.map(fc => ({
-            user_id: user.id,
+        const fileReadPromises = stagedFiles.map(file => {
+            return new Promise<{ name: string, content: string }>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve({ name: file.name, content: e.target?.result as string });
+                reader.onerror = (e) => reject(new Error(`Failed to read file ${file.name}: ${e}`));
+                reader.readAsText(file);
+            });
+        });
+        const fileContents = await Promise.all(fileReadPromises);
+
+        const initialJobs: BatchJob[] = fileContents.map(fc => ({
+            id: crypto.randomUUID(),
+            created_at: new Date().toISOString(),
             script_content: fc.content,
             original_filename: fc.name,
             status: 'queued',
@@ -242,36 +211,60 @@ export const AppContent: React.FC = () => {
             paragraphs_per_chunk: paragraphsPerChunk,
             voice_settings: voiceSettings,
         }));
-
-        const { data: insertedJobs, error: insertError } = await supabase
-            .from('batch_jobs')
-            .insert(newJobsData)
-            .select();
-        
-        if (insertError) throw insertError;
-        
-        setBatchJobs(insertedJobs as BatchJob[]);
+        setBatchJobs(initialJobs);
         setStagedFiles([]);
-        setIsLoading(false);
 
-        for (const job of insertedJobs) {
+        for (const job of initialJobs) {
             try {
                 setBatchJobs(prev => prev.map(j => j.id === job.id ? { ...j, status: 'processing' } : j));
-                await supabase.from('batch_jobs').update({ status: 'processing' }).eq('id', job.id);
                 
-                const finalUrl = await processSingleBatchJob(job);
+                const textChunks = splitScriptByParagraphs(job.script_content, job.paragraphs_per_chunk);
+                if (textChunks.length === 0) throw new Error("Script file is empty or contains no paragraphs.");
+
+                const collectedBlobs: Blob[] = [];
+                let previousRequestId: string | undefined = undefined;
+
+                for (let i = 0; i < textChunks.length; i++) {
+                    setBatchJobs(prev => prev.map(j => 
+                        j.id === job.id 
+                        ? { ...j, progress: { current: i + 1, total: textChunks.length } } 
+                        : j
+                    ));
+                    const result = await generateVoiceover(textChunks[i], job.voice_id, job.voice_settings, job.model_id, previousRequestId);
+                    collectedBlobs.push(result.blob);
+                    previousRequestId = result.requestId;
+                }
                 
-                setBatchJobs(prev => prev.map(j => j.id === job.id ? { ...j, status: 'completed', final_audio_url: finalUrl, progress: null } : j));
-                await supabase.from('batch_jobs').update({ status: 'completed', final_audio_url: finalUrl }).eq('id', job.id);
+                const combinedBlob = new Blob(collectedBlobs, { type: 'audio/mpeg' });
+                const safeFileName = job.original_filename.replace(/[^a-z0-9.]/gi, '_');
+                const storagePath = `${user.id}/${Date.now()}_${safeFileName.replace('.txt', '.mp3')}`;
+                
+                const { error: uploadError } = await supabase.storage.from('history_audio').upload(storagePath, combinedBlob);
+                if (uploadError) throw new Error(`Storage Error: ${uploadError.message}`);
+
+                const { data: { publicUrl } } = supabase.storage.from('history_audio').getPublicUrl(storagePath);
+                if (!publicUrl) throw new Error('Could not get public URL for the uploaded file.');
+
+                const newItem: Omit<HistoryItem, 'id'> = {
+                    user_id: user.id,
+                    name: job.original_filename.replace('.txt', ''),
+                    createdAt: new Date().toISOString(),
+                    audioUrl: publicUrl,
+                };
+                const { data: insertedItem, error: insertError } = await supabase.from('history').insert(newItem).select().single();
+                if (insertError) throw new Error(`Database Error: ${insertError.message}`);
+                
+                setHistory(prev => [insertedItem as HistoryItem, ...prev]);
+
+                setBatchJobs(prev => prev.map(j => j.id === job.id ? { ...j, status: 'completed', final_audio_url: publicUrl, progress: null } : j));
+
             } catch (err) {
                 const message = err instanceof Error ? err.message : "An unknown error occurred.";
                 setBatchJobs(prev => prev.map(j => j.id === job.id ? { ...j, status: 'error', error_message: message, progress: null } : j));
-                await supabase.from('batch_jobs').update({ status: 'error', error_message: message }).eq('id', job.id);
             }
         }
     } catch (err) {
-         setError(err instanceof Error ? err.message : 'An unknown error occurred creating batch jobs.');
-         setIsLoading(false);
+        setError(err instanceof Error ? `Failed to start batch process: ${err.message}` : 'An unknown error occurred preparing batch jobs.');
     }
   };
 
