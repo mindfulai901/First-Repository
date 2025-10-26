@@ -1,14 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import type { AudioResult, BatchJob } from '../types';
+import type { AudioResult } from '../types';
 import { useZip } from '../hooks/useZip';
 
 // --- ICONS --- //
 const DownloadIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" /></svg>;
 const Spinner = () => <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-[var(--color-primary)]"></div>;
-const ItemSpinner = () => <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-[var(--color-primary)]"></div>;
-const CheckIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>;
-const ErrorIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
-const QueueIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-500" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.414-1.415L11 9.586V6z" clipRule="evenodd" /></svg>;
 
 const loadingMessages = [
   "Warming up the vocal cords...", "Synthesizing speech patterns...", "Composing audio chunks...", "Adding the final touches...", "Almost ready!"
@@ -18,7 +14,7 @@ const loadingMessages = [
 interface ResultsDisplayProps {
   mode: 'single' | 'batch';
   audioFiles: AudioResult[];
-  batchJobs: BatchJob[];
+  batchJobs: []; // No longer used here, handled by BatchProcessor
   isLoading: boolean;
   error: string | null;
   onReset: () => void;
@@ -48,46 +44,9 @@ const AudioResultItem: React.FC<{ item: AudioResult }> = ({ item }) => {
   );
 };
 
-// --- BATCH JOB ITEM --- //
-const BatchResultItem: React.FC<{ job: BatchJob }> = ({ job }) => {
-  const getStatusIcon = () => {
-    switch (job.status) {
-      case 'processing': return <ItemSpinner />;
-      case 'completed': return <CheckIcon />;
-      case 'error': return <ErrorIcon />;
-      case 'queued': return <QueueIcon />;
-      default: return null;
-    }
-  };
-
-  return (
-     <div className="p-3 bg-white/80 rounded-lg flex flex-col sm:flex-row items-center gap-4 border-2 border-gray-400">
-      <div className="flex-shrink-0 w-8 text-center">{getStatusIcon()}</div>
-      <div className="flex-grow min-w-0 w-full">
-        <p className="font-bold truncate text-lg" title={job.original_filename}>{job.original_filename}</p>
-        {job.status === 'processing' && job.progress && (
-          <div className="w-full pt-1">
-            <div className="w-full bg-[var(--color-secondary)] rounded-full h-2.5 border border-[var(--color-border)]">
-              <div className="bg-[var(--color-primary)] h-full rounded-full" style={{ width: `${(job.progress.current / job.progress.total) * 100}%` }}></div>
-            </div>
-          </div>
-        )}
-        {job.status === 'error' && <p className="text-sm text-red-600 truncate" title={job.error_message || ''}>{job.error_message}</p>}
-        {job.status === 'completed' && <audio controls src={job.final_audio_url || ''} className="w-full max-w-xs h-8 mt-1"></audio>}
-      </div>
-      <div className="flex-shrink-0">
-        {job.status === 'completed' && (
-          <a href={job.final_audio_url || '#'} download={job.original_filename.replace('.txt', '.mp3')} className="hand-drawn-button flex items-center justify-center p-2">
-            <DownloadIcon />
-          </a>
-        )}
-      </div>
-    </div>
-  )
-};
 
 // --- MAIN COMPONENT --- //
-const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ mode, audioFiles, batchJobs, isLoading, error, onReset, progress }) => {
+const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ mode, audioFiles, isLoading, error, onReset, progress }) => {
   const { createAndDownloadZip, isZipping } = useZip();
   const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
   const [combinedAudioUrl, setCombinedAudioUrl] = useState<string | null>(null);
@@ -121,18 +80,6 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ mode, audioFiles, batch
 
   const handleDownloadAllSingle = () => createAndDownloadZip(audioFiles.map(f => ({ name: `voiceover_chunk_${f.id}.mp3`, data: f.blob })), 'all_voiceovers');
   
-  const handleDownloadAllBatch = async () => {
-    const completedJobs = batchJobs.filter(j => j.status === 'completed' && j.final_audio_url);
-    if(completedJobs.length === 0) return;
-
-    const filesToZip = await Promise.all(completedJobs.map(async (job) => {
-      const response = await fetch(job.final_audio_url!);
-      const blob = await response.blob();
-      return { name: job.original_filename.replace('.txt', '.mp3'), data: blob };
-    }));
-    createAndDownloadZip(filesToZip, 'batch_voiceovers');
-  };
-
   const handleDownloadFullClip = () => {
     if (!combinedAudioUrl) return;
     const link = document.createElement('a');
@@ -174,19 +121,31 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ mode, audioFiles, batch
     );
   }
 
+  if (mode === 'batch') {
+    // Batch UI is now handled by BatchProcessor component, this is a fallback.
+    return (
+      <div className="w-full max-w-5xl p-4 sm:p-8 space-y-6 scroll-container">
+        <div className="text-center">
+          <h2 className="text-4xl font-bold">Batch Processing</h2>
+          <p className="mt-2 text-lg text-[var(--color-text-muted)]">Batch processing is handled in a dedicated view.</p>
+          <button onClick={onReset} className="mt-6 py-3 px-8 text-white rounded-md font-bold text-xl hand-drawn-button">Start Over</button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full max-w-5xl p-4 sm:p-8 space-y-6 scroll-container">
       <div className="flex flex-col md:flex-row justify-between items-center gap-4 border-b-2 border-[var(--color-border)] pb-4">
         <div>
           <h2 className="text-4xl font-bold">Generation Results</h2>
           <p className="mt-1 text-lg text-[var(--color-text-muted)]">
-            {mode === 'single' ? "Preview the full voiceover, or play and download the chunks below." : "Your batch job results are below. Download files as they complete."}
+            Preview the full voiceover, or play and download the chunks below.
           </p>
         </div>
         <button onClick={onReset} className="w-full md:w-auto py-2 px-6 bg-[var(--color-secondary)] text-[var(--color-secondary-text)] rounded-md font-bold transition-colors flex-shrink-0 text-lg hand-drawn-button">Start Over</button>
       </div>
 
-      {mode === 'single' ? (
         <>
           {combinedAudioUrl && audioFiles.length > 0 && (
             <div className="p-4 rounded-lg border-2 border-[var(--color-border)]" style={{backgroundColor: 'var(--color-scroll-container-bg-translucent)'}}>
@@ -215,20 +174,6 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ mode, audioFiles, batch
             {audioFiles.map(item => <AudioResultItem key={item.id} item={item} />)}
           </div>
         </>
-      ) : (
-        <>
-          <div className="p-4 rounded-lg border-2 border-[var(--color-border)] flex flex-col sm:flex-row items-center justify-between gap-4" style={{backgroundColor: 'var(--color-scroll-container-bg-translucent)'}}>
-            <p className="font-bold text-lg text-[var(--color-text)]">Batch Jobs ({batchJobs.filter(j=>j.status === 'completed').length}/{batchJobs.length} Completed)</p>
-            <button onClick={handleDownloadAllBatch} disabled={isZipping || batchJobs.filter(j=>j.status === 'completed').length === 0} className="flex items-center justify-center py-2 px-5 rounded-md text-base font-bold hand-drawn-button w-full sm:w-auto">
-              <DownloadIcon /><span className="ml-2">{isZipping ? 'Zipping...' : 'Download Completed'}</span>
-            </button>
-          </div>
-          <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
-            {batchJobs.map(job => <BatchResultItem key={job.id} job={job} />)}
-            {batchJobs.length === 0 && <p className="text-center py-8 text-lg text-[var(--color-text-muted)]">Batch jobs will appear here as they are created...</p>}
-          </div>
-        </>
-      )}
     </div>
   );
 };
