@@ -85,9 +85,12 @@ const Configurator: React.FC<ConfiguratorProps> = ({
         setVoiceSettings(data.settings);
       }
     } catch (err) {
+      // Duck-typing the error to see if it's an ApiError from our service.
+      // This is more robust than `instanceof` which can fail in some environments.
       // If the voice is not found in the user's library (indicated by a 404 or a 400 "not found" error),
       // then try searching the public voice library.
-      if (err instanceof ApiError && (err.status === 404 || err.status === 400)) {
+      const apiError = err as ApiError;
+      if (apiError && apiError.status && (apiError.status === 404 || apiError.status === 400)) {
         try {
           const sharedData = await searchSharedVoices(voiceId);
           if (sharedData.voices && sharedData.voices.length > 0) {
