@@ -27,7 +27,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (!['host', 'x-forwarded-host', 'x-forwarded-proto', 'x-vercel-id', 'x-real-ip', 'x-vercel-forwarded-for', 'x-vercel-deployment-url'].includes(key.toLowerCase())) {
             const value = req.headers[key];
             if (value) {
-                headers[key] = value;
+                // Fix: A header value can be an array of strings. Join it to form a single string.
+                headers[key] = Array.isArray(value) ? value.join(', ') : value;
             }
         }
     }
