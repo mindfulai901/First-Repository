@@ -90,29 +90,27 @@ const Configurator: React.FC<ConfiguratorProps> = ({
       }
     } catch (err) {
       const apiError = err as ApiError;
-      // BUG FIX: Use "duck typing" by checking for the 'status' property instead of 'instanceof'.
-      // This is more reliable in production environments where class names can be mangled.
-      // Also check for 400, as API can return it for invalid IDs.
       if (apiError && (apiError.status === 404 || apiError.status === 400)) {
+        // The voice wasn't found in the user's personal library. Try the public library.
+        const detailedErrorMessage = `Voice '${voiceId}' was not found in your library or the public one. This can happen if the voice is private and the API key configured on the server is incorrect or from a different ElevenLabs account. Please verify your Vercel project's ELEVENLABS_API_KEY.`;
+
         try {
           const sharedData = await searchSharedVoices(voiceId);
-          if (sharedData.voices && sharedData.voices.length > 0) {
-            const foundVoice = sharedData.voices.find(v => v.voice_id === voiceId || v.name.toLowerCase() === voiceId.toLowerCase());
-            if (foundVoice) {
-              setActiveSharedVoice(foundVoice);
-              setSearchError(null);
-            } else {
-              setSearchError(`Could not find a public voice with ID or name '${voiceId}'.`);
-            }
+          const foundVoice = sharedData.voices?.find(v => v.voice_id === voiceId || v.name.toLowerCase() === voiceId.toLowerCase());
+          
+          if (foundVoice) {
+            setActiveSharedVoice(foundVoice);
+            setSearchError(null);
           } else {
-            setSearchError(
-              `Voice '${voiceId}' was not found in your library or the public one. This can happen if the voice is private and the API key configured on the server is incorrect or from a different ElevenLabs account. Please verify your Vercel project's ELEVENLABS_API_KEY.`
-            );
+            setSearchError(detailedErrorMessage);
           }
         } catch (sharedErr) {
-          setSearchError(sharedErr instanceof Error ? sharedErr.message : "Error searching public library.");
+          // If the fallback search ALSO fails, it strongly points to the same configuration issue.
+          console.error("Fallback search for shared voice also failed:", sharedErr);
+          setSearchError(detailedErrorMessage);
         }
       } else {
+        // For other types of errors, display the direct message.
         setSearchError(err instanceof Error ? err.message : "An unknown error occurred.");
       }
     } finally {
