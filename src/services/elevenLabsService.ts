@@ -133,7 +133,9 @@ export const generateVoiceover = async (
 };
 
 export const getVoices = async (): Promise<VoicesResponse> => {
-  const [url, options] = prepareApiRequest('/v1/voices');
+  const [url, options] = prepareApiRequest('/v1/voices', {
+    headers: { 'Accept': 'application/json' }
+  });
   const response = await fetch(url, options);
   if (!response.ok) await handleError(response);
   return response.json();
@@ -141,7 +143,9 @@ export const getVoices = async (): Promise<VoicesResponse> => {
 
 export const getVoice = async (voiceId: string): Promise<Voice> => {
   if (!voiceId) throw new Error("Voice ID is required.");
-  const [url, options] = prepareApiRequest(`/v1/voices/${voiceId}`);
+  const [url, options] = prepareApiRequest(`/v1/voices/${voiceId}`, {
+    headers: { 'Accept': 'application/json' }
+  });
   const response = await fetch(url, options);
   if (!response.ok) await handleError(response);
   return response.json();
@@ -149,7 +153,9 @@ export const getVoice = async (voiceId: string): Promise<Voice> => {
 
 export const searchSharedVoices = async (searchTerm: string): Promise<SharedVoicesResponse> => {
   if (!searchTerm.trim()) throw new Error("Search term is required.");
-  const [url, options] = prepareApiRequest(`/v1/shared-voices?search=${encodeURIComponent(searchTerm)}`);
+  const [url, options] = prepareApiRequest(`/v1/shared-voices?search=${encodeURIComponent(searchTerm)}`, {
+    headers: { 'Accept': 'application/json' }
+  });
   const response = await fetch(url, options);
   if (!response.ok) await handleError(response);
   return response.json();
@@ -167,7 +173,9 @@ export const addSharedVoice = async (publicUserId: string, voiceId: string, newN
 };
 
 export const getModels = async (): Promise<Model[]> => {
-  const [url, options] = prepareApiRequest('/v1/models');
+  const [url, options] = prepareApiRequest('/v1/models', {
+    headers: { 'Accept': 'application/json' }
+  });
   const response = await fetch(url, options);
   if (!response.ok) await handleError(response);
   return response.json();
