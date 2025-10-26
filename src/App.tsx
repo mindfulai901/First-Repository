@@ -1,32 +1,33 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import ScriptInput from './components/ScriptInput';
 import Configurator from './components/Configurator';
 import ResultsDisplay from './components/ResultsDisplay';
-import ApiKeyInput from './components/ApiKeyInput';
 import SavedVoices from './components/SavedVoices';
-import ParagraphCountInput from './components/WordCountInput'; // Renamed internally, file path is the same
+import ParagraphCountInput from './components/WordCountInput';
 import ModelSelector from './components/ModelSelector';
 import Instructions from './components/Instructions';
 import History from './components/History';
+import Login from './components/Login';
 import { generateVoiceover } from './services/elevenLabsService';
 import type { AudioResult, SavedVoice, VoiceSettings, HistoryItem } from './types';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
+import { useAuth } from './contexts/AuthContext';
+import { supabase } from './supabaseClient';
 import { useLocalStorage } from './hooks/useLocalStorage';
 
-type Step = 'script' | 'paragraphCount' | 'apiKey' | 'modelSelection' | 'config' | 'savedVoices' | 'results';
+type Step = 'script' | 'paragraphCount' | 'modelSelection' | 'config' | 'savedVoices' | 'results';
 type View = 'app' | 'instructions' | 'history';
-type ApiKeyEntryReason = 'initial' | 'switch';
 
 const App: React.FC = () => {
+  const { user } = useAuth();
   const [step, setStep] = useState<Step>('script');
   const [view, setView] = useState<View>('app');
   const [script, setScript] = useState<string>('');
   
-  const [apiKey, setApiKey] = useLocalStorage<string>('elevenLabsApiKey', '');
-  const [savedVoices, setSavedVoices] = useLocalStorage<SavedVoice[]>('elevenLabsSavedVoices', []);
   const [modelId, setModelId] = useLocalStorage<string>('elevenLabsModelId', 'eleven_multilingual_v2');
-  const [history, setHistory] = useLocalStorage<HistoryItem[]>('elevenLabsHistory', []);
+  const [savedVoices, setSavedVoices] = useState<SavedVoice[]>([]);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
   
   const [paragraphsPerChunk, setParagraphsPerChunk] = useState<number>(1);
   const [voiceId, setVoiceId] = useState<string>('');
@@ -42,22 +43,29 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
-  const [apiKeyEntryReason, setApiKeyEntryReason] = useState<ApiKeyEntryReason>('initial');
-  const [stepBeforeApiKeySwitch, setStepBeforeApiKeySwitch] = useState<Step>('script');
 
+  useEffect(() => {
+    if (user) {
+      const fetchUserData = async () => {
+        const { data: voicesData, error: voicesError } = await supabase
+          .from('saved_voices')
+          .select('*')
+          .eq('user_id', user.id);
+        if (voicesError) console.error('Error fetching saved voices:', voicesError);
+        else setSavedVoices(voicesData as SavedVoice[]);
 
-  const handleAddSavedVoice = (voice: SavedVoice) => {
-    if (!savedVoices.some(v => v.voice_id === voice.voice_id)) {
-      setSavedVoices([...savedVoices, voice]);
-    } else {
-      setSavedVoices(savedVoices.map(v => v.voice_id === voice.voice_id ? voice : v));
+        const { data: historyData, error: historyError } = await supabase
+          .from('history')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('createdAt', { ascending: false });
+        if (historyError) console.error('Error fetching history:', historyError);
+        else setHistory(historyData as HistoryItem[]);
+      };
+      fetchUserData();
     }
-  };
+  }, [user]);
 
-  const handleRemoveSavedVoice = (voice_id: string) => {
-    setSavedVoices(savedVoices.filter(v => v.voice_id !== voice_id));
-  };
-  
   const handleSelectSavedVoice = (voice: SavedVoice) => {
     setVoiceId(voice.voice_id);
     setVoiceSettings(voice.settings);
@@ -66,22 +74,18 @@ const App: React.FC = () => {
 
   const splitScriptByParagraphs = (text: string, paragraphsPerChunk: number): string[] => {
     if (!text.trim() || paragraphsPerChunk <= 0) return [];
-  
     const paragraphs = text.split(/\n+/).filter(p => p.trim() !== '');
     if (paragraphs.length === 0) return [];
-  
     const chunks: string[] = [];
     for (let i = 0; i < paragraphs.length; i += paragraphsPerChunk) {
-      const chunkParagraphs = paragraphs.slice(i, i + paragraphsPerChunk);
-      chunks.push(chunkParagraphs.join('\n\n'));
+      chunks.push(paragraphs.slice(i, i + paragraphsPerChunk).join('\n\n'));
     }
-  
     return chunks;
   };
 
   const handleGenerate = useCallback(async () => {
-    if (!voiceId || !apiKey || !modelId) {
-      setError("Voice ID, API Key, and a Model must be set before generating.");
+    if (!voiceId || !modelId || !user) {
+      setError("A voice and model must be selected, and you must be logged in.");
       return;
     }
     setIsLoading(true);
@@ -104,35 +108,35 @@ const App: React.FC = () => {
         const chunk = textChunks[i];
         setProgress({ current: i + 1, total: textChunks.length });
 
-        // FIX: The `apiKey` argument is no longer required for `generateVoiceover`.
         const result = await generateVoiceover(chunk, voiceId, voiceSettings, modelId, previousRequestId);
         
         const audioUrl = URL.createObjectURL(result.blob);
-        const newAudioFile: AudioResult = { id: i + 1, audioUrl, blob: result.blob };
-        
-        collectedAudioResults.push(newAudioFile);
-        setAudioFiles(prevFiles => [...prevFiles, newAudioFile]);
+        collectedAudioResults.push({ id: i + 1, audioUrl, blob: result.blob });
+        setAudioFiles(prevFiles => [...prevFiles, { id: i + 1, audioUrl, blob: result.blob }]);
         previousRequestId = result.requestId;
       }
 
       if (collectedAudioResults.length > 0) {
         const combinedBlob = new Blob(collectedAudioResults.map(f => f.blob), { type: 'audio/mpeg' });
+        const fileName = `${user.id}/${Date.now()}.mp3`;
+        
+        const { error: uploadError } = await supabase.storage.from('history_audio').upload(fileName, combinedBlob);
+        if (uploadError) throw new Error(`Storage Error: ${uploadError.message}`);
+
+        const { data: { publicUrl } } = supabase.storage.from('history_audio').getPublicUrl(fileName);
+        if (!publicUrl) throw new Error('Could not get public URL for the uploaded file.');
+        
         const name = script.trim().split(/\s+/).slice(0, 5).join(' ') + (script.trim().split(/\s+/).length > 5 ? '...' : '');
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            const dataUrl = event.target?.result as string;
-            if (dataUrl) {
-                // FIX: The `id` property should be a string, and `audioDataUrl` should be `audioUrl`.
-                const newItem: HistoryItem = {
-                    id: Date.now().toString(),
-                    name: name || "Untitled Voiceover",
-                    createdAt: new Date().toISOString(),
-                    audioUrl: dataUrl,
-                };
-                setHistory(prev => [newItem, ...prev.slice(0, 49)]); // Prepend and limit history size
-            }
+        const newItem: Omit<HistoryItem, 'id'> = {
+            user_id: user.id,
+            name: name || "Untitled Voiceover",
+            createdAt: new Date().toISOString(),
+            audioUrl: publicUrl,
         };
-        reader.readAsDataURL(combinedBlob);
+        const { data: insertedItem, error: insertError } = await supabase.from('history').insert(newItem).select().single();
+        if (insertError) throw new Error(`Database Error: ${insertError.message}`);
+        
+        setHistory(prev => [insertedItem as HistoryItem, ...prev]);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred during voice generation.');
@@ -140,34 +144,7 @@ const App: React.FC = () => {
       setIsLoading(false);
       setProgress(null);
     }
-  }, [script, paragraphsPerChunk, voiceId, apiKey, voiceSettings, modelId, setHistory]);
-
-  const handleScriptNext = () => setStep('paragraphCount');
-  
-  const handleParagraphCountNext = () => {
-    if (apiKey) {
-      setStep('modelSelection');
-    } else {
-      setApiKeyEntryReason('initial');
-      setStep('apiKey');
-    }
-  };
-
-  const handleApiKeyNext = () => {
-    if (apiKeyEntryReason === 'switch') {
-        setStep(stepBeforeApiKeySwitch); // Return to the step before switching
-    } else {
-        setStep('modelSelection');
-    }
-  };
-  
-  const handleApiKeyBack = () => {
-    // For 'switch' mode, "back" should return to where the user was.
-    // For 'initial' mode, there's no logical back step, so we can disable it or go to paragraph count.
-    setStep(apiKeyEntryReason === 'switch' ? stepBeforeApiKeySwitch : 'paragraphCount');
-  };
-
-  const handleModelSelectionNext = () => setStep('config');
+  }, [script, paragraphsPerChunk, voiceId, modelId, voiceSettings, user]);
 
   const handleReset = () => {
     setScript('');
@@ -180,42 +157,24 @@ const App: React.FC = () => {
     setView('app');
   }
 
-  const handleSwitchApiKey = () => {
-    setStepBeforeApiKeySwitch(step === 'apiKey' ? 'config' : step);
-    setApiKeyEntryReason('switch');
-    setView('app');
-    setStep('apiKey');
-  };
-
   const renderContent = () => {
-    if (view === 'instructions') {
-        return <Instructions onBack={() => setView('app')} />;
+    if (!user) {
+      return <Login />;
     }
-    if (view === 'history') {
-      return <History history={history} setHistory={setHistory} onBack={() => setView('app')} />;
-    }
+
+    if (view === 'instructions') return <Instructions onBack={() => setView('app')} />;
+    if (view === 'history') return <History history={history} setHistory={setHistory} onBack={() => setView('app')} />;
 
     switch (step) {
       case 'script':
-        return <ScriptInput script={script} setScript={setScript} onNext={handleScriptNext} />;
+        return <ScriptInput script={script} setScript={setScript} onNext={() => setStep('paragraphCount')} />;
       case 'paragraphCount':
-        return <ParagraphCountInput paragraphsPerChunk={paragraphsPerChunk} setParagraphsPerChunk={setParagraphsPerChunk} onNext={handleParagraphCountNext} onBack={() => setStep('script')} />;
-      case 'apiKey':
-        return (
-          <ApiKeyInput
-            apiKey={apiKey}
-            setApiKey={setApiKey}
-            onNext={handleApiKeyNext}
-            entryReason={apiKeyEntryReason}
-            onBack={handleApiKeyBack}
-          />
-        );
+        return <ParagraphCountInput paragraphsPerChunk={paragraphsPerChunk} setParagraphsPerChunk={setParagraphsPerChunk} onNext={() => setStep('modelSelection')} onBack={() => setStep('script')} />;
       case 'modelSelection':
-        return <ModelSelector selectedModel={modelId} setSelectedModel={setModelId} onNext={handleModelSelectionNext} onBack={() => setStep('paragraphCount')} />;
+        return <ModelSelector selectedModel={modelId} setSelectedModel={setModelId} onNext={() => setStep('config')} onBack={() => setStep('paragraphCount')} />;
       case 'config':
         return (
           <Configurator
-            apiKey={apiKey}
             modelId={modelId}
             voiceId={voiceId}
             setVoiceId={setVoiceId}
@@ -224,37 +183,21 @@ const App: React.FC = () => {
             onGenerate={handleGenerate}
             onBack={() => setStep('modelSelection')}
             onShowSaved={() => setStep('savedVoices')}
-            onSaveVoice={handleAddSavedVoice}
             savedVoices={savedVoices}
+            setSavedVoices={setSavedVoices}
           />
         );
       case 'savedVoices':
-        return (
-          <SavedVoices 
-            savedVoices={savedVoices}
-            onSelectVoice={handleSelectSavedVoice}
-            onRemoveVoice={handleRemoveSavedVoice}
-            onBack={() => setStep('config')}
-          />
-        );
+        return <SavedVoices savedVoices={savedVoices} onSelectVoice={handleSelectSavedVoice} setSavedVoices={setSavedVoices} onBack={() => setStep('config')} />;
       case 'results':
-        return (
-          <ResultsDisplay
-            audioFiles={audioFiles}
-            isLoading={isLoading}
-            error={error}
-            onReset={handleReset}
-            progress={progress}
-          />
-        );
-      default:
-        return null;
+        return <ResultsDisplay audioFiles={audioFiles} isLoading={isLoading} error={error} onReset={handleReset} progress={progress} />;
+      default: return null;
     }
   };
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <Header view={view} setView={setView} onSwitchApiKey={handleSwitchApiKey} />
+    <div className="min-h-screen flex flex-col relative">
+      <Header view={view} setView={setView} />
       <main className="flex-grow container mx-auto p-4 sm:p-6 lg:p-8 flex flex-col items-center justify-center max-w-6xl w-full">
         {renderContent()}
       </main>

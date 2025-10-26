@@ -17,20 +17,16 @@ const Login: React.FC = () => {
                 provider: 'google',
                 options: {
                     redirectTo: window.location.origin,
-                    // By adding 'prompt: consent', we ensure the user is always
-                    // shown the Google authorization screen, even if they've logged in before.
                     queryParams: {
                         prompt: 'consent',
                     },
                 },
             });
             if (error) {
-                // This error is from Supabase before the redirect happens.
                 console.error("Error starting Google login flow:", error.message);
                 alert(`Could not initiate sign in: ${error.message}`);
             }
         } catch (e) {
-            // This catches unexpected errors in the client-side code itself.
             console.error("An unexpected JavaScript error occurred during login:", e);
             const message = e instanceof Error ? e.message : "An unknown error occurred."
             alert(`A critical error occurred: ${message}`);

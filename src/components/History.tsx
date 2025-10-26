@@ -1,5 +1,6 @@
 import React from 'react';
 import type { HistoryItem } from '../types';
+import { supabase } from '../supabaseClient';
 
 interface HistoryProps {
   history: HistoryItem[];
@@ -11,14 +12,31 @@ const TrashIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w
 const DownloadIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" /></svg>;
 
 const History: React.FC<HistoryProps> = ({ history, setHistory, onBack }) => {
-  const handleRemove = (id: number | string) => {
-    setHistory(history.filter(item => item.id !== id));
+  const handleRemove = async (item: HistoryItem) => {
+    // 1. Delete from Supabase Storage
+    const filePath = new URL(item.audioUrl).pathname.split('/history_audio/')[1];
+    if (filePath) {
+        const { error: storageError } = await supabase.storage.from('history_audio').remove([filePath]);
+        if (storageError) {
+            alert(`Could not delete audio file: ${storageError.message}`);
+            // Do not proceed with DB deletion if file deletion fails
+            return;
+        }
+    }
+
+    // 2. Delete from Supabase Database
+    const { error: dbError } = await supabase.from('history').delete().eq('id', item.id);
+    if (dbError) {
+        alert(`Could not delete history record: ${dbError.message}`);
+    } else {
+        setHistory(history.filter(h => h.id !== item.id));
+    }
   };
 
   const handleDownload = (item: HistoryItem) => {
     const link = document.createElement('a');
-    // FIX: The property `audioDataUrl` does not exist on `HistoryItem`. Use `audioUrl` instead.
     link.href = item.audioUrl;
+    link.target = '_blank'; // Open in new tab for direct download
     link.download = `${item.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_${new Date(item.createdAt).toLocaleDateString().replace(/\//g, '-')}.mp3`;
     document.body.appendChild(link);
     link.click();
@@ -46,7 +64,6 @@ const History: React.FC<HistoryProps> = ({ history, setHistory, onBack }) => {
                 <p className="text-base text-gray-600">
                   {new Date(item.createdAt).toLocaleString()}
                 </p>
-                {/* FIX: The property `audioDataUrl` does not exist on `HistoryItem`. Use `audioUrl` instead. */}
                 <audio controls src={item.audioUrl} className="w-full mt-2"></audio>
               </div>
               <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-2 flex-shrink-0 w-full sm:w-auto">
@@ -59,7 +76,7 @@ const History: React.FC<HistoryProps> = ({ history, setHistory, onBack }) => {
                   <span className="ml-2">Download</span>
                 </button>
                 <button
-                  onClick={() => handleRemove(item.id)}
+                  onClick={() => handleRemove(item)}
                   className="p-3 bg-red-200 hover:bg-red-300 text-red-800 rounded-full transition-colors hand-drawn-button border-red-800 shadow-red-800"
                   style={{boxShadow: '4px 4px 0px #c00'}}
                   aria-label={`Remove ${item.name}`}

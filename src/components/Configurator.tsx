@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect } from 'react';
-// FIX: Import `getModelCapabilities` to make it available in this component.
 import { getVoice, searchSharedVoices, addSharedVoice, ApiError, getModelCapabilities } from '../services/elevenLabsService';
 import type { Voice, SavedVoice, VoiceSettings, SharedVoice } from '../types';
 import { useAuth } from '../contexts/AuthContext';
@@ -40,7 +39,6 @@ const Configurator: React.FC<ConfiguratorProps> = ({
   const [isSaved, setIsSaved] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // FIX: `getModelCapabilities` is a function that should be called with `modelId`.
   const capabilities = getModelCapabilities(modelId);
 
   useEffect(() => {
@@ -92,8 +90,9 @@ const Configurator: React.FC<ConfiguratorProps> = ({
       }
     } catch (err) {
       const apiError = err as ApiError;
-      // FIX: Use "duck typing" by checking for the 'status' property instead of 'instanceof'.
+      // BUG FIX: Use "duck typing" by checking for the 'status' property instead of 'instanceof'.
       // This is more reliable in production environments where class names can be mangled.
+      // Also check for 400, as API can return it for invalid IDs.
       if (apiError && (apiError.status === 404 || apiError.status === 400)) {
         try {
           const sharedData = await searchSharedVoices(voiceId);
@@ -106,7 +105,6 @@ const Configurator: React.FC<ConfiguratorProps> = ({
               setSearchError(`Could not find a public voice with ID or name '${voiceId}'.`);
             }
           } else {
-            // IMPROVEMENT: Provide a more helpful error message if both searches fail.
             setSearchError(
               `Voice '${voiceId}' was not found in your library or the public one. This can happen if the voice is private and the API key configured on the server is incorrect or from a different ElevenLabs account. Please verify your Vercel project's ELEVENLABS_API_KEY.`
             );
@@ -155,11 +153,11 @@ const Configurator: React.FC<ConfiguratorProps> = ({
 
   const handleSave = async () => {
     if (!activeVoice || !user) return;
-    const voiceToSave: SavedVoice = {
+    const voiceToSave: Omit<SavedVoice, 'id'> = {
         user_id: user.id,
         voice_id: activeVoice.voice_id,
         name: activeVoice.name,
-        customName: activeVoice.name, // Let's keep it simple for now, can add custom naming later
+        customName: activeVoice.name,
         settings: voiceSettings,
         preview_url: activeVoice.preview_url,
         labels: activeVoice.labels,

@@ -1,10 +1,11 @@
 import React from 'react';
 import type { SavedVoice } from '../types';
+import { supabase } from '../supabaseClient';
 
 interface SavedVoicesProps {
   savedVoices: SavedVoice[];
   onSelectVoice: (voice: SavedVoice) => void;
-  onRemoveVoice: (voiceId: string) => void;
+  setSavedVoices: (voices: SavedVoice[]) => void;
   onBack: () => void;
 }
 
@@ -13,9 +14,24 @@ const TrashIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w
 const SavedVoices: React.FC<SavedVoicesProps> = ({
   savedVoices,
   onSelectVoice,
-  onRemoveVoice,
+  setSavedVoices,
   onBack,
 }) => {
+
+  const handleRemoveVoice = async (voiceId: string) => {
+    const voiceToRemove = savedVoices.find(v => v.voice_id === voiceId);
+    if (!voiceToRemove || !voiceToRemove.id) return;
+    
+    const { error } = await supabase.from('saved_voices').delete().eq('id', voiceToRemove.id);
+    
+    if (error) {
+        alert(`Error removing voice: ${error.message}`);
+    } else {
+        setSavedVoices(savedVoices.filter(v => v.voice_id !== voiceId));
+    }
+  };
+
+
   return (
     <div className="w-full max-w-3xl p-8 space-y-6 scroll-container">
       <div className="text-center border-b-2 border-gray-300 pb-4">
@@ -44,7 +60,7 @@ const SavedVoices: React.FC<SavedVoicesProps> = ({
                   Use Voice
                 </button>
                 <button
-                  onClick={() => onRemoveVoice(voice.voice_id)}
+                  onClick={() => handleRemoveVoice(voice.voice_id)}
                   className="p-2 bg-red-200 hover:bg-red-300 text-red-800 rounded-full transition-colors"
                   aria-label={`Remove ${voice.customName}`}
                 >

@@ -34,10 +34,6 @@ export const UserMenu: React.FC = () => {
     const confirmation = window.prompt("This is irreversible. You will lose all your saved voices and history. Type 'DELETE' to confirm.");
     if (confirmation === 'DELETE') {
       try {
-        // IMPORTANT: You need to create a Supabase Edge Function named 'delete-user'
-        // that handles the deletion logic securely on the server-side.
-        // This function should delete user data from storage and database tables,
-        // and finally delete the user from the 'auth.users' table.
         const { error } = await supabase.functions.invoke('delete-user');
         if (error) throw error;
         alert('Your account has been successfully deleted.');
