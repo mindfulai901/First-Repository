@@ -184,7 +184,7 @@ const Configurator: React.FC<ConfiguratorProps> = ({
   return (
     <div className="w-full max-w-4xl p-8 space-y-6 scroll-container">
       <div className="text-center">
-        <h2 className="text-4xl font-bold">Step 4: Configure Voice</h2>
+        <h2 className="text-4xl font-bold">Step 3: Configure Voice</h2>
         <p className="mt-2 text-lg text-gray-600">Find a voice and fine-tune its settings.</p>
       </div>
 

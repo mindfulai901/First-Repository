@@ -43,6 +43,8 @@ export interface SharedVoicesResponse {
 
 // Represents a voice saved by the user with a custom name and settings
 export interface SavedVoice {
+  id?: string; // Supabase DB id
+  user_id?: string;
   voice_id: string;
   name: string; // Original name
   customName: string;
@@ -66,8 +68,9 @@ export interface Model {
 }
 
 export interface HistoryItem {
-  id: number;
+  id: string;
+  user_id?: string;
   name: string;
   createdAt: string;
-  audioDataUrl: string;
+  audioUrl: string;
 }

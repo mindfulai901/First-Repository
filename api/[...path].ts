@@ -1,4 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+// Fix: Import Buffer to resolve TypeScript error in Node.js environment.
+import { Buffer } from 'buffer';
 
 const ELEVENLABS_API_URL = 'https://api.elevenlabs.io';
 
