@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { Readable } from 'stream';
+import { Buffer } from 'buffer';
 
 const ELEVENLABS_API_URL = 'https://api.elevenlabs.io';
 
@@ -19,7 +19,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const targetUrl = `${ELEVENLABS_API_URL}${apiPath}`;
-  console.log(`Proxying request to: ${targetUrl}`); // For debugging
 
   try {
     const headers: HeadersInit = {
@@ -47,27 +46,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       body,
       redirect: 'follow',
     });
-    
-    console.log(`Received ${elevenLabsResponse.status} from ${targetUrl}`); // For debugging
-
-    // Forward the status code from the target service
-    res.status(elevenLabsResponse.status);
 
     // Forward headers from the target service to the client
     elevenLabsResponse.headers.forEach((value, key) => {
+      // Avoid forwarding headers that can cause issues
       const forbiddenHeaders = ['content-encoding', 'transfer-encoding', 'connection'];
       if (!forbiddenHeaders.includes(key.toLowerCase())) {
         res.setHeader(key, value);
       }
     });
 
-    // Stream the response body back to the client.
-    if (elevenLabsResponse.body) {
-      const bodyStream = Readable.fromWeb(elevenLabsResponse.body as any);
-      bodyStream.pipe(res);
-    } else {
-      res.end();
-    }
+    // Send the status code from the target service
+    res.status(elevenLabsResponse.status);
+
+    // Buffer the response body and send it to the client
+    const responseBody = await elevenLabsResponse.arrayBuffer();
+    // Fix: Use Buffer object which is now imported.
+    res.send(Buffer.from(responseBody));
 
   } catch (error) {
     console.error('Proxy request failed:', error);
