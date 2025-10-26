@@ -85,7 +85,9 @@ const Configurator: React.FC<ConfiguratorProps> = ({
         setVoiceSettings(data.settings);
       }
     } catch (err) {
-      if (err instanceof ApiError && err.status === 404) {
+      // If the voice is not found in the user's library (indicated by a 404 or a 400 "not found" error),
+      // then try searching the public voice library.
+      if (err instanceof ApiError && (err.status === 404 || err.status === 400)) {
         try {
           const sharedData = await searchSharedVoices(voiceId);
           if (sharedData.voices && sharedData.voices.length > 0) {
