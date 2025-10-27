@@ -1,5 +1,5 @@
 import React from 'react';
-import { supabase } from '../supabaseClient';
+import { supabase, isSupabaseConfigured } from '../supabaseClient';
 
 const GoogleIcon = () => (
   <svg className="w-6 h-6 mr-3" viewBox="0 0 48 48">
@@ -12,6 +12,7 @@ const GoogleIcon = () => (
 
 const Login: React.FC = () => {
     const handleGoogleLogin = async () => {
+        if (!supabase) return;
         try {
             const { error } = await supabase.auth.signInWithOAuth({
                 provider: 'google',
@@ -32,6 +33,20 @@ const Login: React.FC = () => {
             alert(`A critical error occurred: ${message}`);
         }
     };
+
+    if (!isSupabaseConfigured) {
+        return (
+            <div className="w-full max-w-md p-8 space-y-8 scroll-container text-center bg-[var(--color-warning-bg-translucent)] border-2 border-[var(--color-warning-border)]">
+                <h2 className="text-4xl font-bold">Configuration Needed</h2>
+                <p className="mt-2 text-lg text-[var(--color-text)]">
+                    Authentication is currently disabled.
+                </p>
+                <p className="text-base text-[var(--color-text-muted)]">
+                    The app preview requires Supabase environment variables (<code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code>) to be set for user features to work correctly.
+                </p>
+            </div>
+        );
+    }
 
     return (
         <div className="w-full max-w-md p-8 space-y-8 scroll-container text-center">
